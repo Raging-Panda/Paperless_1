@@ -6,10 +6,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.content.Intent
-import android.view.Menu
-import android.view.MenuItem
-import android.widget.Button
-import android.widget.EditText
 import android.widget.Toast
 import com.example.myapplication.databinding.ActivityMainBinding
 
@@ -31,13 +27,9 @@ class MainActivity : AppCompatActivity() {
         }
         setSupportActionBar(binding.toolbar)
 
-        val loginButton: Button = findViewById(R.id.loginButton)
-        val usernameEdit: EditText = findViewById(R.id.username)
-        val passwordEdit: EditText = findViewById(R.id.password)
-
-        loginButton.setOnClickListener {
-            val username = usernameEdit.text.toString()
-            val password = passwordEdit.text.toString()
+        binding.loginButton.setOnClickListener {
+            val username = binding.username.text.toString()
+            val password = binding.password.text.toString()
             if (username.isNotEmpty() && password.isNotEmpty()) {
                 // Mock login success
                 Toast.makeText(this, "Login successful! Welcome, $username", Toast.LENGTH_SHORT).show()
@@ -49,16 +41,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_settings -> true
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
 }
