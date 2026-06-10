@@ -165,7 +165,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   }
 
   String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      AppSettings.instance.formatDate(d.toIso8601String());
 
   String get _filterLabel {
     if (_filterStart != null && _filterEnd != null) {
@@ -563,14 +563,15 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                     final receipt = item as Receipt;
                                     final date = DateTime.tryParse(receipt.date);
                                     final formattedDate = date != null
-                                        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
+                                        ? AppSettings.instance.formatDate(receipt.date)
                                         : receipt.date;
+                                    final compact = AppSettings.instance.compactMode;
                                     final amtText =
                                         '${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}';
                                     if (_selectionMode) {
                                       final selected = _isSelected(receipt);
                                       return Padding(
-                                        padding: const EdgeInsets.only(bottom: 12),
+                                        padding: EdgeInsets.only(bottom: compact ? 6 : 12),
                                         child: Stack(
                                           children: [
                                             Card(
@@ -580,8 +581,8 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                               shape: RoundedRectangleBorder(
                                                   borderRadius: BorderRadius.circular(16)),
                                               child: ListTile(
-                                                contentPadding: const EdgeInsets.symmetric(
-                                                    horizontal: 16, vertical: 12),
+                                                contentPadding: EdgeInsets.symmetric(
+                                                    horizontal: 16, vertical: compact ? 6 : 12),
                                                 onTap: () => _toggleSelection(receipt),
                                                 title: Text(receipt.title,
                                                     style: const TextStyle(
@@ -609,7 +610,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                       );
                                     }
                                     return Padding(
-                                      padding: const EdgeInsets.only(bottom: 12),
+                                      padding: EdgeInsets.only(bottom: compact ? 6 : 12),
                                       child: Dismissible(
                                         key: ValueKey(receipt.firestoreId ?? receipt.id ?? '${receipt.title}-${receipt.date}'),
                                         direction: DismissDirection.endToStart,
@@ -632,8 +633,8 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                           shape: RoundedRectangleBorder(
                                               borderRadius: BorderRadius.circular(16)),
                                           child: ListTile(
-                                            contentPadding: const EdgeInsets.symmetric(
-                                                horizontal: 16, vertical: 12),
+                                            contentPadding: EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: compact ? 6 : 12),
                                             onTap: () => _openDetail(receipt),
                                             onLongPress: () => _enterSelectionMode(receipt),
                                             title: Text(receipt.title,
@@ -713,8 +714,7 @@ class _FilterSheetState extends State<_FilterSheet> {
     _end = widget.initialEnd;
   }
 
-  String _fmt(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmt(DateTime d) => AppSettings.instance.formatDate(d.toIso8601String());
 
   Future<void> _pickStart() async {
     final picked = await showDatePicker(

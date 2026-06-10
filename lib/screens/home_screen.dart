@@ -244,10 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showReceiptConfirmation(BuildContext context, Receipt receipt) async {
-    final date = DateTime.tryParse(receipt.date);
-    final formattedDate = date != null
-        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
-        : receipt.date;
+    final formattedDate = AppSettings.instance.formatDate(receipt.date);
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,

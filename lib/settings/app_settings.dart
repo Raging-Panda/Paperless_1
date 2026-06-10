@@ -14,6 +14,8 @@ class AppSettings {
   static const _keyTheme = 'theme_mode';
   static const _keyOnboarding = 'onboarding_complete';
   static const _keyBudgets = 'budgets';
+  static const _keyDateFormat = 'date_format';
+  static const _keyCompact = 'compact_mode';
 
   String _currencySymbol = r'$';
   String get currencySymbol => _currencySymbol;
@@ -30,6 +32,13 @@ class AppSettings {
   Map<String, double> _budgets = {};
   Map<String, double> get budgets => Map.unmodifiable(_budgets);
 
+  /// One of: 'YYYY-MM-DD'  'MM/DD/YYYY'  'DD/MM/YYYY'
+  String _dateFormat = 'YYYY-MM-DD';
+  String get dateFormat => _dateFormat;
+
+  bool _compactMode = false;
+  bool get compactMode => _compactMode;
+
   late ValueNotifier<ThemeMode> themeNotifier;
 
   Future<void> load() async {
@@ -41,6 +50,8 @@ class AppSettings {
     );
     _biometricEnabled = prefs.getBool(_keyBiometric) ?? false;
     _onboardingComplete = prefs.getBool(_keyOnboarding) ?? false;
+    _dateFormat = prefs.getString(_keyDateFormat) ?? 'YYYY-MM-DD';
+    _compactMode = prefs.getBool(_keyCompact) ?? false;
     final budgetsJson = prefs.getString(_keyBudgets);
     if (budgetsJson != null) {
       final raw = jsonDecode(budgetsJson) as Map<String, dynamic>;
@@ -76,6 +87,32 @@ class AppSettings {
     _biometricEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyBiometric, enabled);
+  }
+
+  Future<void> setDateFormat(String format) async {
+    _dateFormat = format;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyDateFormat, format);
+  }
+
+  Future<void> setCompactMode(bool compact) async {
+    _compactMode = compact;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCompact, compact);
+  }
+
+  /// Formats an ISO-8601 date string using the active date format preference.
+  String formatDate(String isoDate) {
+    final d = DateTime.tryParse(isoDate);
+    if (d == null) return isoDate;
+    final y = d.year.toString();
+    final m = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return switch (_dateFormat) {
+      'MM/DD/YYYY' => '$m/$dd/$y',
+      'DD/MM/YYYY' => '$dd/$m/$y',
+      _ => '$y-$m-$dd',
+    };
   }
 
   Future<void> setBudget(String category, double? limit) async {

@@ -141,7 +141,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final formattedDate =
-        '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+        AppSettings.instance.formatDate(_selectedDate.toIso8601String());
 
     return Scaffold(
       backgroundColor: Colors.transparent,

@@ -71,10 +71,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final date = DateTime.tryParse(_receipt.date);
-    final formattedDate = date != null
-        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
-        : _receipt.date;
+    final formattedDate = AppSettings.instance.formatDate(_receipt.date);
 
     return PopScope(
       canPop: false,
