@@ -2,7 +2,10 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import '../data/receipt_database.dart';
+import '../data/receipt_repository.dart';
 import '../settings/app_settings.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,20 +18,50 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   bool _saving = false;
+  bool _nameDirty = false;
   bool _uploadingAvatar = false;
-  String? _uploadedPhotoUrl; // overrides user.photoURL after a fresh upload
+  String? _uploadedPhotoUrl;
+
+  // Quick stats
+  int? _receiptCount;
+  double? _monthlySpend;
+  int? _categoryCount;
 
   @override
   void initState() {
     super.initState();
     final user = FirebaseAuth.instance.currentUser;
-    _nameController.text = user?.displayName ?? '';
+    final currentName = user?.displayName ?? '';
+    _nameController.text = currentName;
+    _nameController.addListener(() {
+      final dirty = _nameController.text.trim() != currentName;
+      if (dirty != _nameDirty) setState(() => _nameDirty = dirty);
+    });
+    _loadStats();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStats() async {
+    final receipts = await ReceiptDatabase.instance.readAllReceipts();
+    final now = DateTime.now();
+    final spend = receipts.where((r) {
+      final d = DateTime.tryParse(r.date);
+      return d != null && d.year == now.year && d.month == now.month;
+    }).fold(0.0, (s, r) => s + r.amount);
+    final cats =
+        receipts.where((r) => r.category != null).map((r) => r.category!).toSet();
+    if (mounted) {
+      setState(() {
+        _receiptCount = receipts.length;
+        _monthlySpend = spend;
+        _categoryCount = cats.length;
+      });
+    }
   }
 
   String? get _effectivePhotoUrl =>
@@ -127,18 +160,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveName() async {
     final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Display name cannot be empty.')));
+      return;
+    }
     setState(() => _saving = true);
     try {
       await FirebaseAuth.instance.currentUser!.updateDisplayName(name);
       if (!mounted) return;
+      setState(() => _nameDirty = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Display name updated.')),
-      );
+          const SnackBar(content: Text('Display name updated.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update name: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to update name: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -207,6 +244,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _signOut() async {
+    await ReceiptRepository.instance.clearCache();
+    await GoogleSignIn().signOut();
+    await FirebaseAuth.instance.signOut();
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E2A4A),
+        title: const Text('Delete account?'),
+        content: const Text(
+          'All your data will be permanently deleted. '
+          'This cannot be undone.',
+          style: TextStyle(color: Colors.white70, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete account',
+                  style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ReceiptRepository.instance.clearCache();
+      await FirebaseAuth.instance.currentUser!.delete();
+      // AuthGate stream fires → LoginScreen
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final msg = e.code == 'requires-recent-login'
+          ? 'Please sign out and sign back in before deleting your account.'
+          : e.message ?? 'Failed to delete account.';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -317,6 +397,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              // ── Quick stats ──────────────────────────────────────────
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  _StatCard(
+                    value: _receiptCount != null ? '$_receiptCount' : '—',
+                    label: 'Receipts',
+                    icon: Icons.receipt_outlined,
+                  ),
+                  const SizedBox(width: 10),
+                  _StatCard(
+                    value: _monthlySpend != null
+                        ? '${AppSettings.instance.currencySymbol}${_monthlySpend!.toStringAsFixed(0)}'
+                        : '—',
+                    label: 'This month',
+                    icon: Icons.calendar_today_outlined,
+                  ),
+                  const SizedBox(width: 10),
+                  _StatCard(
+                    value: _categoryCount != null ? '$_categoryCount' : '—',
+                    label: 'Categories',
+                    icon: Icons.label_outline,
+                  ),
+                ],
+              ),
+
               // ── Profile ──────────────────────────────────────────────
               const SizedBox(height: 32),
               _sectionLabel('Profile'),
@@ -343,15 +449,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 10),
               ElevatedButton(
-                onPressed: _saving ? null : _saveName,
+                onPressed: (_saving || !_nameDirty) ? null : _saveName,
                 style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48)),
                 child: _saving
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child:
-                            CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Save name'),
               ),
 
@@ -415,10 +520,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
 
               // ── Security ─────────────────────────────────────────────
+              const SizedBox(height: 28),
+              _sectionLabel('Security'),
+              const SizedBox(height: 10),
               if (isPasswordProvider) ...[
-                const SizedBox(height: 28),
-                _sectionLabel('Security'),
-                const SizedBox(height: 10),
                 OutlinedButton(
                   onPressed: _showChangeEmailDialog,
                   style: OutlinedButton.styleFrom(
@@ -432,7 +537,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       minimumSize: const Size.fromHeight(48)),
                   child: const Text('Send password reset email'),
                 ),
+                const SizedBox(height: 10),
               ],
+              OutlinedButton(
+                onPressed: _signOut,
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48)),
+                child: const Text('Sign out'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: _deleteAccount,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent),
+                ),
+                child: const Text('Delete account'),
+              ),
             ],
           ),
         ),
@@ -442,6 +564,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ── Reusable widgets ────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  const _StatCard({required this.value, required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: Colors.deepPurpleAccent),
+            const SizedBox(height: 6),
+            Text(value,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _InfoCard extends StatelessWidget {
   final List<Widget> children;
