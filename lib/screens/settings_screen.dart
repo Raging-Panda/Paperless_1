@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../data/receipt_repository.dart';
 import '../settings/app_settings.dart';
@@ -14,11 +15,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _currencies = [r'$', '€', '£', '¥', '₹'];
   late String _selectedCurrency;
   String? _version;
+  late bool _biometricEnabled;
 
   @override
   void initState() {
     super.initState();
     _selectedCurrency = AppSettings.instance.currencySymbol;
+    _biometricEnabled = AppSettings.instance.biometricEnabled;
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _version = '${info.version}+${info.buildNumber}');
     });
@@ -59,6 +62,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Local cache cleared.')),
     );
+  }
+
+  Future<void> _onBiometricChanged(bool value) async {
+    final auth = LocalAuthentication();
+    final supported = await auth.isDeviceSupported();
+    if (!supported) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Biometric authentication is not available on this device.')),
+      );
+      return;
+    }
+    if (value) {
+      final ok = await auth.authenticate(
+        localizedReason: 'Confirm your identity to enable biometric lock',
+        options: const AuthenticationOptions(biometricOnly: false),
+      );
+      if (!ok) return;
+    }
+    await AppSettings.instance.setBiometricEnabled(value);
+    if (mounted) setState(() => _biometricEnabled = value);
   }
 
   @override
@@ -104,6 +129,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 trailing: const Icon(Icons.delete_outline, color: Colors.redAccent),
                 onTap: _confirmClearCache,
+              ),
+            ),
+            const SizedBox(height: 28),
+            _SectionLabel('Security'),
+            const SizedBox(height: 8),
+            _SettingsCard(
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Biometric lock',
+                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                subtitle: const Text(
+                  'Require fingerprint or face ID to open app',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                value: _biometricEnabled,
+                onChanged: _onBiometricChanged,
               ),
             ),
             const SizedBox(height: 28),

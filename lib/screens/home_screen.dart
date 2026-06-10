@@ -10,6 +10,7 @@ import '../settings/app_settings.dart';
 import '../widgets/loading_dialog.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
+import 'analytics_screen.dart';
 import 'help_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
@@ -393,17 +394,35 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 24),
                 child: Center(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => const ReceiptListScreen()),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(220, 56),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('View Receipts', style: TextStyle(fontSize: 16)),
+                  child: Column(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const ReceiptListScreen()),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(220, 56),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('View Receipts', style: TextStyle(fontSize: 16)),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const AnalyticsScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.bar_chart),
+                        label: const Text('Analytics', style: TextStyle(fontSize: 16)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(220, 56),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../widgets/biometric_gate.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'splash_screen.dart';
@@ -15,7 +16,10 @@ class AuthGate extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
-        return snapshot.hasData ? const HomeScreen() : const LoginScreen();
+        if (snapshot.hasData) {
+          return const BiometricGate(child: HomeScreen());
+        }
+        return const LoginScreen();
       },
     );
   }
