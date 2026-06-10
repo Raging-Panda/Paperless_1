@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum SortOrder { dateDesc, dateAsc, amountDesc, amountAsc, merchantAsc }
@@ -9,6 +10,7 @@ class AppSettings {
   static const _keyCurrency = 'currency_symbol';
   static const _keySort = 'sort_order';
   static const _keyBiometric = 'biometric_enabled';
+  static const _keyTheme = 'theme_mode';
 
   String _currencySymbol = r'$';
   String get currencySymbol => _currencySymbol;
@@ -19,6 +21,8 @@ class AppSettings {
   bool _biometricEnabled = false;
   bool get biometricEnabled => _biometricEnabled;
 
+  late ValueNotifier<ThemeMode> themeNotifier;
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _currencySymbol = prefs.getString(_keyCurrency) ?? r'$';
@@ -27,6 +31,12 @@ class AppSettings {
       orElse: () => SortOrder.dateDesc,
     );
     _biometricEnabled = prefs.getBool(_keyBiometric) ?? false;
+    themeNotifier = ValueNotifier(
+      ThemeMode.values.firstWhere(
+        (e) => e.name == prefs.getString(_keyTheme),
+        orElse: () => ThemeMode.system,
+      ),
+    );
   }
 
   Future<void> setCurrencySymbol(String symbol) async {
@@ -39,6 +49,12 @@ class AppSettings {
     _sortOrder = order;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keySort, order.name);
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeNotifier.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyTheme, mode.name);
   }
 
   Future<void> setBiometricEnabled(bool enabled) async {

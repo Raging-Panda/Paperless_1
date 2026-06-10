@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:nfc_manager/nfc_manager.dart';
@@ -245,7 +246,10 @@ class _HomeScreenState extends State<HomeScreen> {
               if (receipt.notes.isNotEmpty) ReceiptDetailRow(label: 'Notes', value: receipt.notes),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.of(ctx).pop(true);
+                },
                 style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 child: const Text('Save to History'),
               ),

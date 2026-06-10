@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
@@ -298,12 +299,15 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
             ),
           ),
         ],
-        bottom: _syncing
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(4),
-                child: LinearProgressIndicator(),
-              )
-            : null,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(4),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _syncing
+                ? const LinearProgressIndicator(key: ValueKey('bar'))
+                : const SizedBox.shrink(key: ValueKey('empty')),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -441,7 +445,10 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                       child: Dismissible(
                                         key: ValueKey(receipt.firestoreId ?? receipt.id ?? '${receipt.title}-${receipt.date}'),
                                         direction: DismissDirection.endToStart,
-                                        onDismissed: (_) => _deleteReceipt(receipt),
+                                        onDismissed: (_) {
+                                          HapticFeedback.mediumImpact();
+                                          _deleteReceipt(receipt);
+                                        },
                                         background: Container(
                                           alignment: Alignment.centerRight,
                                           padding: const EdgeInsets.only(right: 20),

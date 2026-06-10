@@ -14,6 +14,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const _currencies = [r'$', '€', '£', '¥', '₹'];
   late String _selectedCurrency;
+  late ThemeMode _themeMode;
   String? _version;
   late bool _biometricEnabled;
 
@@ -21,10 +22,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _selectedCurrency = AppSettings.instance.currencySymbol;
+    _themeMode = AppSettings.instance.themeNotifier.value;
     _biometricEnabled = AppSettings.instance.biometricEnabled;
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _version = '${info.version}+${info.buildNumber}');
     });
+  }
+
+  Future<void> _onThemeChanged(ThemeMode mode) async {
+    await AppSettings.instance.setThemeMode(mode);
+    if (mounted) setState(() => _themeMode = mode);
   }
 
   Future<void> _onCurrencyChanged(String? symbol) async {
@@ -95,6 +102,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           children: [
+            _SectionLabel('Appearance'),
+            const SizedBox(height: 8),
+            _SettingsCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Theme',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
+                  const SizedBox(height: 12),
+                  SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        label: Text('System'),
+                        icon: Icon(Icons.brightness_auto),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        label: Text('Light'),
+                        icon: Icon(Icons.light_mode),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        label: Text('Dark'),
+                        icon: Icon(Icons.dark_mode),
+                      ),
+                    ],
+                    selected: {_themeMode},
+                    onSelectionChanged: (s) => _onThemeChanged(s.first),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
             _SectionLabel('Display'),
             const SizedBox(height: 8),
             _SettingsCard(
