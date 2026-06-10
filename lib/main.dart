@@ -605,6 +605,13 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     }
   }
 
+  Future<void> _openAddReceipt() async {
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AddReceiptScreen()),
+    );
+    if (added == true) _loadReceipts();
+  }
+
   Future<void> _deleteReceipt(Receipt receipt) async {
     setState(() => _receipts.remove(receipt));
     try {
@@ -630,6 +637,11 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openAddReceipt,
+        tooltip: 'Add receipt',
+        child: const Icon(Icons.add),
+      ),
       appBar: AppBar(
         title: const Text('Receipt History'),
         bottom: _syncing
@@ -648,13 +660,19 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.receipt_long, size: 56, color: Colors.white54),
-                          SizedBox(height: 18),
-                          Text(
+                        children: [
+                          const Icon(Icons.receipt_long, size: 56, color: Colors.white54),
+                          const SizedBox(height: 18),
+                          const Text(
                             'No saved receipts yet.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white70, fontSize: 18),
+                          ),
+                          const SizedBox(height: 24),
+                          OutlinedButton.icon(
+                            onPressed: _openAddReceipt,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add receipt'),
                           ),
                         ],
                       ),
@@ -1773,6 +1791,148 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AddReceiptScreen extends StatefulWidget {
+  const AddReceiptScreen({super.key});
+
+  @override
+  State<AddReceiptScreen> createState() => _AddReceiptScreenState();
+}
+
+class _AddReceiptScreenState extends State<AddReceiptScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _notesController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _saving = true);
+    try {
+      final receipt = Receipt(
+        title: _titleController.text.trim(),
+        date: _selectedDate.toIso8601String(),
+        amount: double.parse(_amountController.text.trim()),
+        notes: _notesController.text.trim(),
+      );
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await ReceiptRepository.instance.save(uid, receipt);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save receipt: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedDate =
+        '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: const Text('Add Receipt')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _titleController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Merchant / Title',
+                    prefixIcon: Icon(Icons.store_outlined),
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Enter a merchant name' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    prefixIcon: const Icon(Icons.attach_money),
+                    prefixText: AppSettings.instance.currencySymbol,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Enter an amount';
+                    final n = double.tryParse(v.trim());
+                    if (n == null || n < 0) return 'Enter a valid amount';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: _pickDate,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      prefixIcon: Icon(Icons.calendar_today_outlined),
+                    ),
+                    child: Text(
+                      formattedDate,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    prefixIcon: Icon(Icons.notes_outlined),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                  child: _saving
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Save Receipt'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
