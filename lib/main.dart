@@ -158,6 +158,16 @@ class ReceiptDatabase {
     return result.map((json) => Receipt.fromMap(json)).toList();
   }
 
+  Future<void> updateReceipt(Receipt receipt) async {
+    final db = await instance.database;
+    await db.update(
+      'receipts',
+      receipt.toMap(),
+      where: 'id = ?',
+      whereArgs: [receipt.id],
+    );
+  }
+
   Future<void> deleteReceipt(int id) async {
     final db = await instance.database;
     await db.delete('receipts', where: 'id = ?', whereArgs: [id]);
@@ -205,6 +215,21 @@ class ReceiptRepository {
     final receipts = snap.docs.map(Receipt.fromFirestore).toList();
     await ReceiptDatabase.instance.upsertAll(receipts);
     return receipts;
+  }
+
+  Future<Receipt> update(String uid, Receipt receipt) async {
+    if (receipt.firestoreId != null) {
+      await _col(uid).doc(receipt.firestoreId).update({
+        'title': receipt.title,
+        'date': receipt.date,
+        'amount': receipt.amount,
+        'notes': receipt.notes,
+      });
+    }
+    if (receipt.id != null) {
+      await ReceiptDatabase.instance.updateReceipt(receipt);
+    }
+    return receipt;
   }
 
   Future<void> delete(String uid, Receipt receipt) async {
@@ -606,17 +631,27 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   }
 
   Future<void> _openDetail(Receipt receipt) async {
-    final deleted = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(builder: (_) => ReceiptDetailScreen(receipt: receipt)),
     );
-    if (deleted == true) setState(() => _receipts.remove(receipt));
+    if (result == true) {
+      setState(() => _receipts.remove(receipt));
+    } else if (result is Receipt) {
+      setState(() {
+        final i = _receipts.indexWhere(
+          (r) => (r.firestoreId != null && r.firestoreId == receipt.firestoreId) ||
+              (r.id != null && r.id == receipt.id),
+        );
+        if (i != -1) _receipts[i] = result;
+      });
+    }
   }
 
   Future<void> _openAddReceipt() async {
-    final added = await Navigator.of(context).push<bool>(
+    final added = await Navigator.of(context).push<Receipt>(
       MaterialPageRoute(builder: (_) => const AddReceiptScreen()),
     );
-    if (added == true) _loadReceipts();
+    if (added != null) setState(() => _receipts.insert(0, added));
   }
 
   Future<void> _deleteReceipt(Receipt receipt) async {
@@ -1815,7 +1850,22 @@ class ReceiptDetailScreen extends StatefulWidget {
 }
 
 class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
+  late Receipt _receipt;
+  bool _edited = false;
   bool _deleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _receipt = widget.receipt;
+  }
+
+  Future<void> _openEdit() async {
+    final updated = await Navigator.of(context).push<Receipt>(
+      MaterialPageRoute(builder: (_) => AddReceiptScreen(initial: _receipt)),
+    );
+    if (updated != null) setState(() { _receipt = updated; _edited = true; });
+  }
 
   Future<void> _confirmDelete() async {
     final confirmed = await showDialog<bool>(
@@ -1843,7 +1893,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     setState(() => _deleting = true);
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      await ReceiptRepository.instance.delete(uid, widget.receipt);
+      await ReceiptRepository.instance.delete(uid, _receipt);
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -1857,73 +1907,83 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final receipt = widget.receipt;
-    final date = DateTime.tryParse(receipt.date);
+    final date = DateTime.tryParse(_receipt.date);
     final formattedDate = date != null
         ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
-        : receipt.date;
+        : _receipt.date;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Receipt'),
-        actions: [
-          _deleting
-              ? const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Delete',
-                  onPressed: _confirmDelete,
-                ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Amount hero
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      '${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      receipt.title,
-                      style: const TextStyle(color: Colors.white70, fontSize: 18),
-                    ),
-                  ],
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.of(context).pop(_edited ? _receipt : null);
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Receipt'),
+          actions: [
+            if (!_deleting)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit',
+                onPressed: _openEdit,
               ),
-              const SizedBox(height: 28),
-              _DetailRow(icon: Icons.calendar_today_outlined, label: 'Date', value: formattedDate),
-              if (receipt.notes.isNotEmpty)
-                _DetailRow(icon: Icons.notes_outlined, label: 'Notes', value: receipt.notes),
-              if (receipt.firestoreId != null)
-                _DetailRow(icon: Icons.cloud_done_outlined, label: 'Synced', value: 'Saved to cloud'),
-            ],
+            _deleting
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete',
+                    onPressed: _confirmDelete,
+                  ),
+          ],
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${AppSettings.instance.currencySymbol}${_receipt.amount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 48,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _receipt.title,
+                        style: const TextStyle(color: Colors.white70, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                _DetailRow(icon: Icons.calendar_today_outlined, label: 'Date', value: formattedDate),
+                if (_receipt.notes.isNotEmpty)
+                  _DetailRow(icon: Icons.notes_outlined, label: 'Notes', value: _receipt.notes),
+                if (_receipt.firestoreId != null)
+                  _DetailRow(icon: Icons.cloud_done_outlined, label: 'Synced', value: 'Saved to cloud'),
+              ],
+            ),
           ),
         ),
       ),
@@ -1971,7 +2031,8 @@ class _DetailRow extends StatelessWidget {
 }
 
 class AddReceiptScreen extends StatefulWidget {
-  const AddReceiptScreen({super.key});
+  final Receipt? initial;
+  const AddReceiptScreen({super.key, this.initial});
 
   @override
   State<AddReceiptScreen> createState() => _AddReceiptScreenState();
@@ -1984,6 +2045,18 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
   final _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.initial;
+    if (r != null) {
+      _titleController.text = r.title;
+      _amountController.text = r.amount.toStringAsFixed(2);
+      _notesController.text = r.notes;
+      _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+    }
+  }
 
   @override
   void dispose() {
@@ -2007,16 +2080,27 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
     try {
-      final receipt = Receipt(
-        title: _titleController.text.trim(),
-        date: _selectedDate.toIso8601String(),
-        amount: double.parse(_amountController.text.trim()),
-        notes: _notesController.text.trim(),
-      );
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      await ReceiptRepository.instance.save(uid, receipt);
+      final Receipt saved;
+      if (widget.initial != null) {
+        final updated = widget.initial!.copyWith(
+          title: _titleController.text.trim(),
+          date: _selectedDate.toIso8601String(),
+          amount: double.parse(_amountController.text.trim()),
+          notes: _notesController.text.trim(),
+        );
+        saved = await ReceiptRepository.instance.update(uid, updated);
+      } else {
+        final receipt = Receipt(
+          title: _titleController.text.trim(),
+          date: _selectedDate.toIso8601String(),
+          amount: double.parse(_amountController.text.trim()),
+          notes: _notesController.text.trim(),
+        );
+        saved = await ReceiptRepository.instance.save(uid, receipt);
+      }
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(saved);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2034,7 +2118,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Add Receipt')),
+      appBar: AppBar(title: Text(widget.initial != null ? 'Edit Receipt' : 'Add Receipt')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -2101,7 +2185,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                   style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                   child: _saving
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Save Receipt'),
+                      : Text(widget.initial != null ? 'Save Changes' : 'Save Receipt'),
                 ),
               ],
             ),
