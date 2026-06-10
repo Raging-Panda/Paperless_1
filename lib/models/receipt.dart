@@ -13,6 +13,10 @@ class Receipt {
   final double amount;
   final String notes;
   final String? category;
+  final String? photoUrl;
+  final bool isRecurring;
+  final String? recurringInterval; // 'weekly' | 'monthly'
+  final String? nextDueDate;       // ISO-8601 date string
 
   Receipt({
     this.id,
@@ -22,6 +26,10 @@ class Receipt {
     required this.amount,
     required this.notes,
     this.category,
+    this.photoUrl,
+    this.isRecurring = false,
+    this.recurringInterval,
+    this.nextDueDate,
   });
 
   Receipt copyWith({
@@ -32,6 +40,10 @@ class Receipt {
     double? amount,
     String? notes,
     String? category,
+    String? photoUrl,
+    bool? isRecurring,
+    String? recurringInterval,
+    String? nextDueDate,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -41,6 +53,10 @@ class Receipt {
       amount: amount ?? this.amount,
       notes: notes ?? this.notes,
       category: category ?? this.category,
+      photoUrl: photoUrl ?? this.photoUrl,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurringInterval: recurringInterval ?? this.recurringInterval,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
     );
   }
 
@@ -52,6 +68,10 @@ class Receipt {
       'notes': notes,
       'firestore_id': firestoreId,
       'category': category,
+      'photo_url': photoUrl,
+      'is_recurring': isRecurring ? 1 : 0,
+      'recurring_interval': recurringInterval,
+      'next_due_date': nextDueDate,
     };
     if (id != null) {
       map['id'] = id;
@@ -69,6 +89,10 @@ class Receipt {
       amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
       notes: map['notes'] as String,
       category: map['category'] as String?,
+      photoUrl: map['photo_url'] as String?,
+      isRecurring: (map['is_recurring'] as int? ?? 0) == 1,
+      recurringInterval: map['recurring_interval'] as String?,
+      nextDueDate: map['next_due_date'] as String?,
     );
   }
 
@@ -79,6 +103,10 @@ class Receipt {
       'amount': amount,
       'notes': notes,
       'category': category,
+      'photo_url': photoUrl,
+      'is_recurring': isRecurring,
+      'recurring_interval': recurringInterval,
+      'next_due_date': nextDueDate,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
@@ -93,6 +121,10 @@ class Receipt {
       amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
       notes: data['notes'] as String,
       category: data['category'] as String?,
+      photoUrl: data['photo_url'] as String?,
+      isRecurring: data['is_recurring'] as bool? ?? false,
+      recurringInterval: data['recurring_interval'] as String?,
+      nextDueDate: data['next_due_date'] as String?,
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
+import '../services/recurring_service.dart';
 import '../settings/app_settings.dart';
 import '../widgets/loading_dialog.dart';
 import '../widgets/receipt_detail_row.dart';
@@ -28,6 +29,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    RecurringService.processOverdue();
+  }
+
   void _openProfile(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ProfileScreen()),

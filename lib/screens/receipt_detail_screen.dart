@@ -146,8 +146,33 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                   _DetailRow(icon: Icons.label_outline, label: 'Category', value: _receipt.category!),
                 if (_receipt.notes.isNotEmpty)
                   _DetailRow(icon: Icons.notes_outlined, label: 'Notes', value: _receipt.notes),
+                if (_receipt.isRecurring)
+                  _DetailRow(
+                    icon: Icons.repeat,
+                    label: 'Recurring',
+                    value: _receipt.recurringInterval == 'weekly'
+                        ? 'Every week'
+                        : 'Every month',
+                  ),
                 if (_receipt.firestoreId != null)
                   _DetailRow(icon: Icons.cloud_done_outlined, label: 'Synced', value: 'Saved to cloud'),
+                if (_receipt.photoUrl != null) ...[
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.network(
+                      _receipt.photoUrl!,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const SizedBox(
+                              height: 200,
+                              child: Center(child: CircularProgressIndicator())),
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -19,7 +19,7 @@ class ReceiptDatabase {
     final path = p.join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -34,7 +34,11 @@ class ReceiptDatabase {
         amount REAL NOT NULL,
         notes TEXT NOT NULL,
         firestore_id TEXT,
-        category TEXT
+        category TEXT,
+        photo_url TEXT,
+        is_recurring INTEGER NOT NULL DEFAULT 0,
+        recurring_interval TEXT,
+        next_due_date TEXT
       )
     ''');
   }
@@ -45,6 +49,12 @@ class ReceiptDatabase {
     }
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE receipts ADD COLUMN category TEXT');
+    }
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE receipts ADD COLUMN photo_url TEXT');
+      await db.execute('ALTER TABLE receipts ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE receipts ADD COLUMN recurring_interval TEXT');
+      await db.execute('ALTER TABLE receipts ADD COLUMN next_due_date TEXT');
     }
   }
 
