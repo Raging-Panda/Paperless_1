@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../settings/app_settings.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -143,6 +144,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _sendVerification() async {
+    try {
+      await FirebaseAuth.instance.currentUser!.sendEmailVerification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Verification email sent.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to send: $e')));
+    }
+  }
+
+  Future<void> _showChangeEmailDialog() async {
+    final ctrl = TextEditingController();
+    final newEmail = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E2A4A),
+        title: const Text('Change email'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'A verification link will be sent to the new address. '
+              'The change takes effect after you click it.',
+              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'New email address',
+                hintStyle: TextStyle(color: Colors.white38),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: const Text('Send link')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (newEmail == null || newEmail.isEmpty || !mounted) return;
+    try {
+      await FirebaseAuth.instance.currentUser!
+          .verifyBeforeUpdateEmail(newEmail);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Verification link sent to $newEmail.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
   Future<void> _sendPasswordReset() async {
     final email = FirebaseAuth.instance.currentUser?.email;
     if (email == null) return;
@@ -159,6 +226,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
+
+  Widget _sectionLabel(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Text(
+          text.toUpperCase(),
+          style: const TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -238,34 +317,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              // ── Profile ──────────────────────────────────────────────
               const SizedBox(height: 32),
-              Text(
-                'Email',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Text(
-                  user.email ?? '—',
-                  style: const TextStyle(color: Colors.white70, fontSize: 15),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Display name',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
+              _sectionLabel('Profile'),
+              const SizedBox(height: 10),
               TextField(
                 controller: _nameController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
+                  labelText: 'Display name',
+                  labelStyle: const TextStyle(color: Colors.white54),
                   hintText: 'Your name',
                   hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
@@ -280,21 +341,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _saving ? null : _saveName,
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48)),
                 child: _saving
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Save name'),
               ),
+
+              // ── Account ───────────────────────────────────────────────
+              const SizedBox(height: 28),
+              _sectionLabel('Account'),
+              const SizedBox(height: 10),
+              _InfoCard(children: [
+                // Email + verification badge
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Email',
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 2),
+                          Text(user.email ?? '—',
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    user.emailVerified
+                        ? _Chip(
+                            label: 'Verified',
+                            icon: Icons.check_circle,
+                            color: Colors.green,
+                          )
+                        : GestureDetector(
+                            onTap: _sendVerification,
+                            child: _Chip(
+                              label: 'Verify',
+                              icon: Icons.warning_amber_rounded,
+                              color: Colors.orange,
+                            ),
+                          ),
+                  ],
+                ),
+                const _Divider(),
+                // Member since
+                _InfoRow(
+                  label: 'Member since',
+                  value: user.metadata.creationTime != null
+                      ? AppSettings.instance
+                          .formatDate(user.metadata.creationTime!.toIso8601String())
+                      : '—',
+                ),
+                const _Divider(),
+                // Last sign-in
+                _InfoRow(
+                  label: 'Last sign-in',
+                  value: user.metadata.lastSignInTime != null
+                      ? AppSettings.instance.formatDate(
+                          user.metadata.lastSignInTime!.toIso8601String())
+                      : '—',
+                ),
+              ]),
+
+              // ── Security ─────────────────────────────────────────────
               if (isPasswordProvider) ...[
-                const SizedBox(height: 32),
-                const Divider(color: Colors.white12),
-                const SizedBox(height: 16),
+                const SizedBox(height: 28),
+                _sectionLabel('Security'),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: _showChangeEmailDialog,
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
+                  child: const Text('Change email'),
+                ),
+                const SizedBox(height: 10),
                 OutlinedButton(
                   onPressed: _sendPasswordReset,
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
                   child: const Text('Send password reset email'),
                 ),
               ],
@@ -303,6 +438,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+}
+
+// ── Reusable widgets ────────────────────────────────────────────────────────
+
+class _InfoCard extends StatelessWidget {
+  final List<Widget> children;
+  const _InfoCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          ),
+          Text(value,
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _Chip({required this.label, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(color: Colors.white12, height: 1, thickness: 0.5);
   }
 }
 
