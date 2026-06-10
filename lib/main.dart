@@ -158,6 +158,11 @@ class ReceiptDatabase {
     return result.map((json) => Receipt.fromMap(json)).toList();
   }
 
+  Future<void> deleteReceipt(int id) async {
+    final db = await instance.database;
+    await db.delete('receipts', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<void> upsertAll(List<Receipt> receipts) async {
     final db = await instance.database;
     await db.delete('receipts');
@@ -200,6 +205,15 @@ class ReceiptRepository {
     final receipts = snap.docs.map(Receipt.fromFirestore).toList();
     await ReceiptDatabase.instance.upsertAll(receipts);
     return receipts;
+  }
+
+  Future<void> delete(String uid, Receipt receipt) async {
+    if (receipt.firestoreId != null) {
+      await _col(uid).doc(receipt.firestoreId).delete();
+    }
+    if (receipt.id != null) {
+      await ReceiptDatabase.instance.deleteReceipt(receipt.id!);
+    }
   }
 
   Future<void> clearCache() => ReceiptDatabase.instance.clearAll();
@@ -591,6 +605,27 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     }
   }
 
+  Future<void> _deleteReceipt(Receipt receipt) async {
+    setState(() => _receipts.remove(receipt));
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await ReceiptRepository.instance.delete(uid, receipt);
+    } catch (_) {
+      // restore on failure
+      if (mounted) setState(() => _receipts.add(receipt));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete receipt.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Receipt deleted.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -633,14 +668,28 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                         final formattedDate = date != null
                             ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
                             : receipt.date;
-                        return Card(
-                          color: const Color.fromRGBO(255, 255, 255, 0.08),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            title: Text(receipt.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Text('$formattedDate · ${receipt.notes}', style: const TextStyle(color: Colors.white70)),
-                            trailing: Text('${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                        return Dismissible(
+                          key: ValueKey(receipt.firestoreId ?? receipt.id ?? index),
+                          direction: DismissDirection.endToStart,
+                          onDismissed: (_) => _deleteReceipt(receipt),
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                          ),
+                          child: Card(
+                            color: const Color.fromRGBO(255, 255, 255, 0.08),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              title: Text(receipt.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              subtitle: Text('$formattedDate · ${receipt.notes}', style: const TextStyle(color: Colors.white70)),
+                              trailing: Text('${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                            ),
                           ),
                         );
                       },
