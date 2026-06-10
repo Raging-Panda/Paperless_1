@@ -16,3 +16,7 @@ local.properties
 /.claude/settings.local.json
 *.json
 /.omc/state/hud-stdin-cache.json
+/.vs/Paperless_1.slnx/FileContentIndex
+/.vs/Paperless_1.slnx/v18/.wsuo
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
