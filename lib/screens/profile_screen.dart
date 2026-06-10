@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,6 +14,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   bool _saving = false;
+  bool _uploadingAvatar = false;
+  String? _uploadedPhotoUrl; // overrides user.photoURL after a fresh upload
 
   @override
   void initState() {
@@ -23,6 +28,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  String? get _effectivePhotoUrl =>
+      _uploadedPhotoUrl ?? FirebaseAuth.instance.currentUser?.photoURL;
+
+  Future<void> _pickAvatar() async {
+    final choice = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: const Color(0xFF1E2A4A),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: Colors.white),
+              title: const Text('Take photo',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: Colors.white),
+              title: const Text('Choose from gallery',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            if (_effectivePhotoUrl != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: Colors.redAccent),
+                title: const Text('Remove photo',
+                    style: TextStyle(color: Colors.redAccent)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _removeAvatar();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    final file = await ImagePicker().pickImage(
+        source: choice, imageQuality: 85, maxWidth: 512);
+    if (file == null || !mounted) return;
+
+    setState(() => _uploadingAvatar = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final ref =
+          FirebaseStorage.instance.ref('users/$uid/profile/avatar.jpg');
+      await ref.putFile(File(file.path));
+      final url = await ref.getDownloadURL();
+      await FirebaseAuth.instance.currentUser!.updatePhotoURL(url);
+      if (mounted) setState(() => _uploadedPhotoUrl = url);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    setState(() => _uploadingAvatar = true);
+    try {
+      await FirebaseAuth.instance.currentUser!.updatePhotoURL(null);
+      if (mounted) setState(() => _uploadedPhotoUrl = null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to remove photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
   }
 
   String _initials(User user) {
@@ -87,12 +175,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: Colors.deepPurple,
-                  child: Text(
-                    _initials(user),
-                    style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+                child: SizedBox(
+                  width: 112,
+                  height: 112,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Avatar
+                      GestureDetector(
+                        onTap: _pickAvatar,
+                        child: CircleAvatar(
+                          radius: 52,
+                          backgroundColor: Colors.deepPurple,
+                          backgroundImage: _effectivePhotoUrl != null
+                              ? NetworkImage(_effectivePhotoUrl!)
+                              : null,
+                          child: _effectivePhotoUrl == null
+                              ? Text(
+                                  _initials(user),
+                                  style: const TextStyle(
+                                      fontSize: 36,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
+                                )
+                              : null,
+                        ),
+                      ),
+                      // Camera button — bottom right
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _pickAvatar,
+                          child: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurpleAccent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.black26, width: 2),
+                            ),
+                            child: _uploadingAvatar
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white))
+                                : const Icon(Icons.camera_alt,
+                                    size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      // Provider badge — top right
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _ProviderBadge(
+                            providers: user.providerData),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -160,6 +302,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProviderBadge extends StatelessWidget {
+  final List<UserInfo> providers;
+  const _ProviderBadge({required this.providers});
+
+  @override
+  Widget build(BuildContext context) {
+    final isGoogle = providers.any((p) => p.providerId == 'google.com');
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black12, width: 1.5),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+        ],
+      ),
+      child: isGoogle
+          ? const Text('G',
+              style: TextStyle(
+                  color: Color(0xFF4285F4),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  height: 1))
+          : const Icon(Icons.email_outlined, size: 11, color: Colors.blueGrey),
     );
   }
 }
