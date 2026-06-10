@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +23,11 @@ void main() async {
   runApp(const MyApp());
 }
 
+const kCategories = [
+  'Food', 'Travel', 'Transport', 'Shopping',
+  'Office', 'Health', 'Entertainment', 'Other',
+];
+
 class Receipt {
   final int? id;
   final String? firestoreId;
@@ -27,6 +35,7 @@ class Receipt {
   final String date;
   final double amount;
   final String notes;
+  final String? category;
 
   Receipt({
     this.id,
@@ -35,6 +44,7 @@ class Receipt {
     required this.date,
     required this.amount,
     required this.notes,
+    this.category,
   });
 
   Receipt copyWith({
@@ -44,6 +54,7 @@ class Receipt {
     String? date,
     double? amount,
     String? notes,
+    String? category,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -52,6 +63,7 @@ class Receipt {
       date: date ?? this.date,
       amount: amount ?? this.amount,
       notes: notes ?? this.notes,
+      category: category ?? this.category,
     );
   }
 
@@ -62,6 +74,7 @@ class Receipt {
       'amount': amount,
       'notes': notes,
       'firestore_id': firestoreId,
+      'category': category,
     };
     if (id != null) {
       map['id'] = id;
@@ -78,6 +91,7 @@ class Receipt {
       date: map['date'] as String,
       amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
       notes: map['notes'] as String,
+      category: map['category'] as String?,
     );
   }
 
@@ -87,6 +101,7 @@ class Receipt {
       'date': date,
       'amount': amount,
       'notes': notes,
+      'category': category,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
@@ -100,6 +115,7 @@ class Receipt {
       date: data['date'] as String,
       amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
       notes: data['notes'] as String,
+      category: data['category'] as String?,
     );
   }
 }
@@ -121,7 +137,7 @@ class ReceiptDatabase {
     final path = p.join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -135,7 +151,8 @@ class ReceiptDatabase {
         date TEXT NOT NULL,
         amount REAL NOT NULL,
         notes TEXT NOT NULL,
-        firestore_id TEXT
+        firestore_id TEXT,
+        category TEXT
       )
     ''');
   }
@@ -143,6 +160,9 @@ class ReceiptDatabase {
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE receipts ADD COLUMN firestore_id TEXT');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE receipts ADD COLUMN category TEXT');
     }
   }
 
@@ -224,6 +244,7 @@ class ReceiptRepository {
         'date': receipt.date,
         'amount': receipt.amount,
         'notes': receipt.notes,
+        'category': receipt.category,
       });
     }
     if (receipt.id != null) {
@@ -352,9 +373,68 @@ class MyApp extends StatelessWidget {
             ),
           ),
           if (child != null) Positioned.fill(child: child),
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(bottom: false, child: OfflineBanner()),
+          ),
         ],
       ),
       home: const AuthGate(),
+    );
+  }
+}
+
+class OfflineBanner extends StatefulWidget {
+  const OfflineBanner({super.key});
+
+  @override
+  State<OfflineBanner> createState() => _OfflineBannerState();
+}
+
+class _OfflineBannerState extends State<OfflineBanner> {
+  bool _offline = false;
+  StreamSubscription<List<ConnectivityResult>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+    _sub = Connectivity().onConnectivityChanged.listen((results) {
+      if (mounted) {
+        setState(() => _offline = results.every((r) => r == ConnectivityResult.none));
+      }
+    });
+  }
+
+  Future<void> _check() async {
+    final results = await Connectivity().checkConnectivity();
+    if (mounted) {
+      setState(() => _offline = results.every((r) => r == ConnectivityResult.none));
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: _offline ? 30 : 0,
+      color: Colors.redAccent.shade700,
+      child: _offline
+          ? const Center(
+              child: Text(
+                'No internet — showing cached data',
+                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }
@@ -620,6 +700,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   DateTime? _filterStart;
   DateTime? _filterEnd;
   SortOrder _sortOrder = AppSettings.instance.sortOrder;
+  String? _selectedCategory;
 
   bool get _filterActive => _filterStart != null || _filterEnd != null;
 
@@ -629,6 +710,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
           !r.title.toLowerCase().contains(_searchQuery.toLowerCase())) {
         return false;
       }
+      if (_selectedCategory != null && r.category != _selectedCategory) return false;
       final date = DateTime.tryParse(r.date);
       if (date != null) {
         if (_filterStart != null &&
@@ -912,7 +994,35 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                     ],
                   ),
                 ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: kCategories.map((cat) {
+                    final selected = _selectedCategory == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(cat),
+                        selected: selected,
+                        onSelected: (on) =>
+                            setState(() => _selectedCategory = on ? cat : null),
+                        selectedColor: Colors.deepPurple,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        labelStyle: TextStyle(
+                          color: selected ? Colors.white : Colors.white54,
+                          fontSize: 12,
+                        ),
+                        side: BorderSide(
+                          color: selected ? Colors.deepPurpleAccent : Colors.white12,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
@@ -1998,11 +2108,15 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const _currencies = [r'$', '€', '£', '¥', '₹'];
   late String _selectedCurrency;
+  String? _version;
 
   @override
   void initState() {
     super.initState();
     _selectedCurrency = AppSettings.instance.currencySymbol;
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = '${info.version}+${info.buildNumber}');
+    });
   }
 
   Future<void> _onCurrencyChanged(String? symbol) async {
@@ -2093,10 +2207,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Paperless', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('Version 1.0.0+1', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                children: [
+                  const Text('Paperless', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _version != null ? 'Version $_version' : 'Version —',
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -2438,6 +2555,8 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                 ),
                 const SizedBox(height: 28),
                 _DetailRow(icon: Icons.calendar_today_outlined, label: 'Date', value: formattedDate),
+                if (_receipt.category != null)
+                  _DetailRow(icon: Icons.label_outline, label: 'Category', value: _receipt.category!),
                 if (_receipt.notes.isNotEmpty)
                   _DetailRow(icon: Icons.notes_outlined, label: 'Notes', value: _receipt.notes),
                 if (_receipt.firestoreId != null)
@@ -2504,6 +2623,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  String? _selectedCategory;
   bool _saving = false;
 
   @override
@@ -2515,6 +2635,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
       _amountController.text = r.amount.toStringAsFixed(2);
       _notesController.text = r.notes;
       _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+      _selectedCategory = r.category;
     }
   }
 
@@ -2548,6 +2669,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           date: _selectedDate.toIso8601String(),
           amount: double.parse(_amountController.text.trim()),
           notes: _notesController.text.trim(),
+          category: _selectedCategory,
         );
         saved = await ReceiptRepository.instance.update(uid, updated);
       } else {
@@ -2556,6 +2678,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           date: _selectedDate.toIso8601String(),
           amount: double.parse(_amountController.text.trim()),
           notes: _notesController.text.trim(),
+          category: _selectedCategory,
         );
         saved = await ReceiptRepository.instance.save(uid, receipt);
       }
@@ -2638,6 +2761,37 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                     prefixIcon: Icon(Icons.notes_outlined),
                     alignLabelWithHint: true,
                   ),
+                ),
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Category (optional)',
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: kCategories.map((cat) {
+                    final selected = _selectedCategory == cat;
+                    return ChoiceChip(
+                      label: Text(cat),
+                      selected: selected,
+                      onSelected: (on) =>
+                          setState(() => _selectedCategory = on ? cat : null),
+                      selectedColor: Colors.deepPurple,
+                      backgroundColor: Colors.white.withValues(alpha: 0.06),
+                      labelStyle: TextStyle(
+                        color: selected ? Colors.white : Colors.white70,
+                        fontSize: 13,
+                      ),
+                      side: BorderSide(
+                        color: selected ? Colors.deepPurpleAccent : Colors.white24,
+                      ),
+                    );
+                  }).toList(),
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
