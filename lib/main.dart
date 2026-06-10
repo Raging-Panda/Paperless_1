@@ -867,6 +867,42 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     );
   }
 
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  String _monthLabel(String yearMonth) {
+    if (yearMonth.isEmpty) return 'Unknown';
+    final parts = yearMonth.split('-');
+    if (parts.length != 2) return yearMonth;
+    final month = int.tryParse(parts[1]);
+    if (month == null || month < 1 || month > 12) return yearMonth;
+    return '${_monthNames[month - 1]} ${parts[0]}';
+  }
+
+  // Flat list for non-date sorts; header + receipts for date sorts.
+  List<dynamic> get _groupedItems {
+    final filtered = _filtered;
+    if (_sortOrder != SortOrder.dateDesc && _sortOrder != SortOrder.dateAsc) {
+      return filtered;
+    }
+    final items = <dynamic>[];
+    String? lastMonth;
+    for (final r in filtered) {
+      final date = DateTime.tryParse(r.date);
+      final monthKey = date != null
+          ? '${date.year}-${date.month.toString().padLeft(2, '0')}'
+          : '';
+      if (monthKey != lastMonth) {
+        items.add(monthKey);
+        lastMonth = monthKey;
+      }
+      items.add(r);
+    }
+    return items;
+  }
+
   PopupMenuItem<SortOrder> _sortMenuItem(
       SortOrder value, String label, SortOrder current) {
     return PopupMenuItem(
@@ -1064,46 +1100,73 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                               )
                             : RefreshIndicator(
                                 onRefresh: _syncReceipts,
-                                child: ListView.separated(
-                      itemCount: _filtered.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final receipt = _filtered[index];
-                        final date = DateTime.tryParse(receipt.date);
-                        final formattedDate = date != null
-                            ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
-                            : receipt.date;
-                        return Dismissible(
-                          key: ValueKey(receipt.firestoreId ?? receipt.id ?? index),
-                          direction: DismissDirection.endToStart,
-                          onDismissed: (_) => _deleteReceipt(receipt),
-                          background: Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 20),
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent.withValues(alpha: 0.85),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
-                          ),
-                          child: Card(
-                            color: const Color.fromRGBO(255, 255, 255, 0.08),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              onTap: () => _openDetail(receipt),
-                              title: Text(receipt.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              subtitle: Text('$formattedDate · ${receipt.notes}', style: const TextStyle(color: Colors.white70)),
-                              trailing: Text('${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                                child: ListView.builder(
+                                  itemCount: _groupedItems.length,
+                                  itemBuilder: (context, index) {
+                                    final item = _groupedItems[index];
+                                    if (item is String) {
+                                      return _MonthHeader(label: _monthLabel(item));
+                                    }
+                                    final receipt = item as Receipt;
+                                    final date = DateTime.tryParse(receipt.date);
+                                    final formattedDate = date != null
+                                        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
+                                        : receipt.date;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: Dismissible(
+                                        key: ValueKey(receipt.firestoreId ?? receipt.id ?? '${receipt.title}-${receipt.date}'),
+                                        direction: DismissDirection.endToStart,
+                                        onDismissed: (_) => _deleteReceipt(receipt),
+                                        background: Container(
+                                          alignment: Alignment.centerRight,
+                                          padding: const EdgeInsets.only(right: 20),
+                                          decoration: BoxDecoration(
+                                            color: Colors.redAccent.withValues(alpha: 0.85),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                                        ),
+                                        child: Card(
+                                          color: const Color.fromRGBO(255, 255, 255, 0.08),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          child: ListTile(
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            onTap: () => _openDetail(receipt),
+                                            title: Text(receipt.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            subtitle: Text('$formattedDate · ${receipt.notes}', style: const TextStyle(color: Colors.white70)),
+                                            trailing: Text('${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthHeader extends StatelessWidget {
+  final String label;
+  const _MonthHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 6),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
         ),
       ),
     );
