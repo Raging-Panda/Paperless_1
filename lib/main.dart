@@ -1735,11 +1735,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed == true && mounted) {
       final uid = FirebaseAuth.instance.currentUser!.uid;
+      try {
+        await ReceiptRepository.instance.save(uid, receipt);
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          const SnackBar(content: Text('Receipt saved to history.')),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to save receipt.'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _retrySave(uid, receipt),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _retrySave(String uid, Receipt receipt) async {
+    try {
       await ReceiptRepository.instance.save(uid, receipt);
       if (!mounted) return;
-      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(this.context).showSnackBar(
         const SnackBar(content: Text('Receipt saved to history.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('Save failed. Check your connection and try again.')),
       );
     }
   }
