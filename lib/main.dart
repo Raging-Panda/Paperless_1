@@ -244,24 +244,40 @@ class ReceiptRepository {
   Future<void> clearCache() => ReceiptDatabase.instance.clearAll();
 }
 
+enum SortOrder { dateDesc, dateAsc, amountDesc, amountAsc, merchantAsc }
+
 class AppSettings {
   static final instance = AppSettings._();
   AppSettings._();
 
   static const _keyCurrency = 'currency_symbol';
+  static const _keySort = 'sort_order';
 
   String _currencySymbol = r'$';
   String get currencySymbol => _currencySymbol;
 
+  SortOrder _sortOrder = SortOrder.dateDesc;
+  SortOrder get sortOrder => _sortOrder;
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _currencySymbol = prefs.getString(_keyCurrency) ?? r'$';
+    _sortOrder = SortOrder.values.firstWhere(
+      (e) => e.name == prefs.getString(_keySort),
+      orElse: () => SortOrder.dateDesc,
+    );
   }
 
   Future<void> setCurrencySymbol(String symbol) async {
     _currencySymbol = symbol;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyCurrency, symbol);
+  }
+
+  Future<void> setSortOrder(SortOrder order) async {
+    _sortOrder = order;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keySort, order.name);
   }
 }
 
@@ -603,29 +619,45 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   String _searchQuery = '';
   DateTime? _filterStart;
   DateTime? _filterEnd;
+  SortOrder _sortOrder = AppSettings.instance.sortOrder;
 
   bool get _filterActive => _filterStart != null || _filterEnd != null;
 
-  List<Receipt> get _filtered => _receipts.where((r) {
-        if (_searchQuery.isNotEmpty &&
-            !r.title.toLowerCase().contains(_searchQuery.toLowerCase())) {
+  List<Receipt> get _filtered {
+    final list = _receipts.where((r) {
+      if (_searchQuery.isNotEmpty &&
+          !r.title.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+      final date = DateTime.tryParse(r.date);
+      if (date != null) {
+        if (_filterStart != null &&
+            date.isBefore(DateTime(
+                _filterStart!.year, _filterStart!.month, _filterStart!.day))) {
           return false;
         }
-        final date = DateTime.tryParse(r.date);
-        if (date != null) {
-          if (_filterStart != null &&
-              date.isBefore(DateTime(
-                  _filterStart!.year, _filterStart!.month, _filterStart!.day))) {
-            return false;
-          }
-          if (_filterEnd != null &&
-              date.isAfter(DateTime(
-                  _filterEnd!.year, _filterEnd!.month, _filterEnd!.day, 23, 59, 59))) {
-            return false;
-          }
+        if (_filterEnd != null &&
+            date.isAfter(DateTime(
+                _filterEnd!.year, _filterEnd!.month, _filterEnd!.day, 23, 59, 59))) {
+          return false;
         }
-        return true;
-      }).toList();
+      }
+      return true;
+    }).toList();
+    switch (_sortOrder) {
+      case SortOrder.dateDesc:
+        list.sort((a, b) => b.date.compareTo(a.date));
+      case SortOrder.dateAsc:
+        list.sort((a, b) => a.date.compareTo(b.date));
+      case SortOrder.amountDesc:
+        list.sort((a, b) => b.amount.compareTo(a.amount));
+      case SortOrder.amountAsc:
+        list.sort((a, b) => a.amount.compareTo(b.amount));
+      case SortOrder.merchantAsc:
+        list.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+    return list;
+  }
 
   String _fmtDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -677,6 +709,17 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
       // offline or error — keep cached data
     } finally {
       if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _syncReceipts() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final synced = await ReceiptRepository.instance.syncFromFirestore(uid);
+      if (!mounted) return;
+      setState(() => _receipts = synced);
+    } catch (_) {
+      // offline — keep current list
     }
   }
 
@@ -742,6 +785,26 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     );
   }
 
+  PopupMenuItem<SortOrder> _sortMenuItem(
+      SortOrder value, String label, SortOrder current) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(
+            current == value
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked,
+            size: 18,
+            color: current == value ? Colors.deepPurpleAccent : Colors.white38,
+          ),
+          const SizedBox(width: 10),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -754,6 +817,21 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
       appBar: AppBar(
         title: const Text('Receipt History'),
         actions: [
+          PopupMenuButton<SortOrder>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort',
+            onSelected: (order) async {
+              await AppSettings.instance.setSortOrder(order);
+              setState(() => _sortOrder = order);
+            },
+            itemBuilder: (_) => [
+              _sortMenuItem(SortOrder.dateDesc,    'Date: newest first',    _sortOrder),
+              _sortMenuItem(SortOrder.dateAsc,     'Date: oldest first',    _sortOrder),
+              _sortMenuItem(SortOrder.amountDesc,  'Amount: highest first', _sortOrder),
+              _sortMenuItem(SortOrder.amountAsc,   'Amount: lowest first',  _sortOrder),
+              _sortMenuItem(SortOrder.merchantAsc, 'Merchant: A–Z',         _sortOrder),
+            ],
+          ),
           IconButton(
             tooltip: 'Filter by date',
             onPressed: _openFilter,
@@ -874,7 +952,9 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                   ],
                                 ),
                               )
-                            : ListView.separated(
+                            : RefreshIndicator(
+                                onRefresh: _syncReceipts,
+                                child: ListView.separated(
                       itemCount: _filtered.length,
                       separatorBuilder: (context, index) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
@@ -910,6 +990,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                         );
                       },
                     ),
+                              ),
               ),
             ],
           ),
