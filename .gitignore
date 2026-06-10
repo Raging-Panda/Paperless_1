@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+/.claude/settings.local.json
+*.json
+/.omc/state/hud-stdin-cache.json
