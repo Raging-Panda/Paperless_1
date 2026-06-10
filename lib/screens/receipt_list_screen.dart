@@ -108,7 +108,6 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   Future<void> _bulkExport() async {
     final receipts = _selectedReceipts;
     if (receipts.isEmpty) return;
-    final sym = AppSettings.instance.currencySymbol;
     final buf = StringBuffer()
       ..writeln('Title,Date,Amount,Category,Notes');
     for (final r in receipts) {

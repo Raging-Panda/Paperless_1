@@ -47,7 +47,7 @@ class _BiometricGateState extends State<BiometricGate>
       }
       final ok = await _auth.authenticate(
         localizedReason: 'Unlock Paperless',
-        options: const AuthenticationOptions(biometricOnly: false),
+        biometricOnly: false,
       );
       if (mounted) setState(() { _locked = !ok; _authenticating = false; });
     } catch (_) {

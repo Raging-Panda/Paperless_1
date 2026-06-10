@@ -167,7 +167,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           maxY: chartMax,
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+              getTooltipItem: (group, _, rod, _) => BarTooltipItem(
                 _fmt(rod.toY),
                 const TextStyle(color: Colors.white, fontSize: 12),
               ),
@@ -233,12 +233,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         final spendPct = grandTotal > 0 ? c.total / grandTotal : 0.0;
         final budget = budgets[c.category];
         final hasBudget = budget != null && budget > 0;
-        final budgetPct = hasBudget ? (c.total / budget!).clamp(0.0, 2.0) : 0.0;
-        final isOver = hasBudget && c.total > budget!;
+        final budgetPct = hasBudget ? (c.total / budget).clamp(0.0, 2.0) : 0.0;
+        final isOver = hasBudget && c.total > budget;
         final isNear = hasBudget && budgetPct >= 0.75 && !isOver;
         Color barColor = Colors.deepPurpleAccent;
-        if (isOver) barColor = Colors.redAccent;
-        else if (isNear) barColor = Colors.orangeAccent;
+        if (isOver) {
+          barColor = Colors.redAccent;
+        } else if (isNear) barColor = Colors.orangeAccent;
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -269,8 +270,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     if (hasBudget)
                       Text(
                         isOver
-                            ? '+${_fmt(c.total - budget!)} over'
-                            : '${_fmt(budget! - c.total)} left',
+                            ? '+${_fmt(c.total - budget)} over'
+                            : '${_fmt(budget - c.total)} left',
                         style: TextStyle(
                           color: isOver
                               ? Colors.redAccent
@@ -305,7 +306,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          'Budget: ${_fmt(budget!)} / mo',
+                          'Budget: ${_fmt(budget)} / mo',
                           style: const TextStyle(
                               color: Colors.white38, fontSize: 11),
                         ),

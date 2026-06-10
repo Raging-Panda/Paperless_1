@@ -40,7 +40,7 @@ class _PaperLoadingIconState extends State<PaperLoadingIcon>
       height: widget.size,
       child: AnimatedBuilder(
         animation: _ctrl,
-        builder: (_, __) => CustomPaint(
+        builder: (_, _) => CustomPaint(
           painter: _PaperLoopPainter(_ctrl.value),
         ),
       ),

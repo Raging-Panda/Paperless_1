@@ -166,7 +166,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
                           : const SizedBox(
                               height: 200,
                               child: Center(child: CircularProgressIndicator())),
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                 ],

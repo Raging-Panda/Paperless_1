@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "566050066474",
+    "project_id": "paperless1-42534",
+    "storage_bucket": "paperless1-42534.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:566050066474:android:94450e23540f7b5a87f353",
+        "android_client_info": {
+          "package_name": "com.example.paperless1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "566050066474-hlfll7mta6epacqr191chigga33149e9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLwMuNcMFdmgh6fjwgHEmcVvsElNFrG5Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "566050066474-hlfll7mta6epacqr191chigga33149e9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:566050066474:android:71797b54c5cac47e87f353",
+        "android_client_info": {
+          "package_name": "com.paperless.za"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "566050066474-hlfll7mta6epacqr191chigga33149e9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLwMuNcMFdmgh6fjwgHEmcVvsElNFrG5Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "566050066474-hlfll7mta6epacqr191chigga33149e9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

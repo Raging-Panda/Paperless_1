@@ -249,7 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     await ReceiptRepository.instance.clearCache();
-    await GoogleSignIn().signOut();
+    await GoogleSignIn.instance.signOut();
     await FirebaseAuth.instance.signOut();
   }
 

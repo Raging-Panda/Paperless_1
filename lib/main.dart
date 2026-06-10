@@ -1,19 +1,19 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'firebase_options.dart';
 import 'screens/root_gate.dart';
 import 'settings/app_settings.dart';
 import 'widgets/offline_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp();
   await AppSettings.instance.load();
   runApp(const MyApp());
 }
 
 // Smooth horizontal slide on all platforms — matches iOS feel.
-const _pageTransitions = PageTransitionsTheme(
+final _pageTransitions = PageTransitionsTheme(
   builders: {
     TargetPlatform.android: CupertinoPageTransitionsBuilder(),
     TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),

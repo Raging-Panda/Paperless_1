@@ -1,15 +1,17 @@
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'package:nfc_manager/src/nfc_manager_android/tags/ndef.dart';
+import 'package:nfc_manager/src/nfc_manager_ios/tags/ndef.dart';
+import 'package:ndef_record/ndef_record.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../settings/app_settings.dart';
-import '../widgets/loading_dialog.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
 import 'analytics_screen.dart';
@@ -117,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startNfcScan(BuildContext context) async {
     final availability = await NfcManager.instance.checkAvailability();
     if (!mounted) return;
-    if (availability != NfcAvailability.available) {
+    if (availability != NfcAvailability.enabled) {
       // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(this.context).showSnackBar(
         const SnackBar(content: Text('NFC is not available on this device.')),
@@ -163,12 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     NfcManager.instance.startSession(
+      pollingOptions: {NfcPollingOption.iso14443},
       onDiscovered: (NfcTag tag) async {
         String? text;
         try {
-          final ndef = Ndef.from(tag);
-          if (ndef != null) {
-            final msg = ndef.cachedMessage ?? await ndef.read();
+          final msg = await _readNdefMessage(tag);
+          if (msg != null) {
             text = _extractNdefText(msg);
           }
         } catch (_) {}
@@ -226,6 +228,22 @@ class _HomeScreenState extends State<HomeScreen> {
         continue;
       }
     }
+    return null;
+  }
+
+  Future<NdefMessage?> _readNdefMessage(NfcTag tag) async {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final ndef = NdefAndroid.from(tag);
+      if (ndef == null) return null;
+      return ndef.cachedNdefMessage ?? await ndef.getNdefMessage();
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final ndef = NdefIos.from(tag);
+      if (ndef == null) return null;
+      return ndef.cachedNdefMessage ?? await ndef.readNdef();
+    }
+
     return null;
   }
 
@@ -317,12 +335,12 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await ReceiptRepository.instance.save(uid, receipt);
       if (!mounted) return;
-      ScaffoldMessenger.of(this.context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Receipt saved to history.')),
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(this.context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Save failed. Check your connection and try again.')),
       );
     }
@@ -391,7 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.of(context).pop();
                   await ReceiptRepository.instance.clearCache();
-                  await GoogleSignIn().signOut();
+                  await GoogleSignIn.instance.signOut();
                   await FirebaseAuth.instance.signOut();
                   // AuthGate stream fires → LoginScreen
                 },

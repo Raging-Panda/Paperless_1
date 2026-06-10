@@ -65,14 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _loading = true);
     try {
-      final googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        if (mounted) setState(() => _loading = false);
-        return;
-      }
-      final googleAuth = await googleUser.authentication;
+      final googleUser = await GoogleSignIn.instance.authenticate();
+      final googleAuth = googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
+        accessToken: googleAuth.idToken,
         idToken: googleAuth.idToken,
       );
       await FirebaseAuth.instance.signInWithCredential(credential);

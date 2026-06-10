@@ -214,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (value) {
       final ok = await auth.authenticate(
         localizedReason: 'Confirm your identity to enable biometric lock',
-        options: const AuthenticationOptions(biometricOnly: false),
+        biometricOnly: false,
       );
       if (!ok) return;
     }
