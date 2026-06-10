@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
+import 'package:share_plus/share_plus.dart';
+import 'package:sqflite/sqflite.dart';
+import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../settings/app_settings.dart';
 
@@ -63,6 +68,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _compactMode;
   late bool _biometricEnabled;
   String? _version;
+  int? _receiptCount;
+  int? _photoCount;
+  int? _dbSizeBytes;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -75,9 +84,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _version = '${info.version}+${info.buildNumber}');
     });
+    _loadStorageStats();
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  // ── Storage stats ─────────────────────────────────────────────────────────
+
+  Future<void> _loadStorageStats() async {
+    final receipts = await ReceiptDatabase.instance.readAllReceipts();
+    int dbSize = 0;
+    try {
+      final dbPath = await getDatabasesPath();
+      final file = File(p.join(dbPath, 'receipts.db'));
+      if (await file.exists()) dbSize = await file.length();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _receiptCount = receipts.length;
+      _photoCount = receipts.where((r) => r.photoUrl != null).length;
+      _dbSizeBytes = dbSize;
+    });
+  }
+
+  String _fmtSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  // ── Export all ────────────────────────────────────────────────────────────
+
+  Future<void> _exportAll() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final receipts = await ReceiptDatabase.instance.readAllReceipts();
+      if (receipts.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No receipts to export.')));
+        }
+        return;
+      }
+      final buf = StringBuffer()
+        ..writeln('Title,Date,Amount,Category,Notes');
+      for (final r in receipts) {
+        final t = r.title.replaceAll('"', '""');
+        final n = r.notes.replaceAll('"', '""');
+        final c = (r.category ?? '').replaceAll('"', '""');
+        buf.writeln('"$t","${r.date}",${r.amount},"$c","$n"');
+      }
+      await Share.share(
+        buf.toString(),
+        subject: 'All receipts (${receipts.length} items)',
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   Future<void> _onThemeChanged(ThemeMode mode) async {
     await AppSettings.instance.setThemeMode(mode);
@@ -274,6 +339,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 28),
             _SectionLabel('Data'),
             const SizedBox(height: 8),
+
+            // Export all
+            _SettingsCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Export all receipts',
+                    style: TextStyle(color: Colors.white)),
+                subtitle: const Text(
+                  'Share full history as a CSV file',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                trailing: _exporting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.ios_share_outlined,
+                        color: Colors.white54),
+                onTap: _exportAll,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Storage usage
+            _SettingsCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Storage usage',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
+                  const SizedBox(height: 12),
+                  _StatRow(
+                    icon: Icons.receipt_outlined,
+                    label: 'Receipts',
+                    value: _receiptCount != null ? '$_receiptCount' : '—',
+                  ),
+                  const SizedBox(height: 8),
+                  _StatRow(
+                    icon: Icons.photo_outlined,
+                    label: 'Photos attached',
+                    value: _photoCount != null ? '$_photoCount' : '—',
+                  ),
+                  const SizedBox(height: 8),
+                  _StatRow(
+                    icon: Icons.storage_outlined,
+                    label: 'Local cache size',
+                    value: _dbSizeBytes != null
+                        ? _fmtSize(_dbSizeBytes!)
+                        : '—',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Clear cache
             _SettingsCard(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -327,6 +448,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            _SettingsCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Open-source licences',
+                    style: TextStyle(color: Colors.white)),
+                trailing: const Icon(Icons.chevron_right,
+                    color: Colors.white38),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'Paperless',
+                  applicationVersion: _version,
+                ),
               ),
             ),
           ],
@@ -445,6 +581,30 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
 }
 
 // ── Reusable widgets ─────────────────────────────────────────────────────────
+
+class _StatRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _StatRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.white38),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        ),
+        Text(value,
+            style: const TextStyle(color: Colors.white, fontSize: 13)),
+      ],
+    );
+  }
+}
+
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
