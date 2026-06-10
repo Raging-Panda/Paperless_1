@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release_apk:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create a GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      # ── Firebase config ─────────────────────────────────────────────────────
+      # Required secrets: GOOGLE_SERVICES_JSON, FIREBASE_OPTIONS_DART
+      - name: Write Firebase config files
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+          echo '${{ secrets.FIREBASE_OPTIONS_DART }}' > lib/firebase_options.dart
+
+      # ── Release signing ─────────────────────────────────────────────────────
+      # Required secrets: KEYSTORE_BASE64, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      # Generate KEYSTORE_BASE64 locally: base64 -w 0 release.keystore
+      - name: Write release keystore
+        run: echo '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > android/app/release.keystore
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties << 'EOF'
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=release.keystore
+          EOF
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      # ── Publish ──────────────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Paperless ${{ github.ref_name }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
