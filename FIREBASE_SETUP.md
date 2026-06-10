@@ -22,6 +22,12 @@ In the Firebase Console:
 
 ---
 
+## 2b. Enable Firestore
+
+Firebase Console → **Build → Firestore Database → Create database** → choose a region → **Start in test mode**.
+
+---
+
 ## 3. Install required CLI tools
 
 Run these once on your machine:

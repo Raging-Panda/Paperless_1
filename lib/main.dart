@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ void main() async {
 
 class Receipt {
   final int? id;
+  final String? firestoreId;
   final String title;
   final String date;
   final double amount;
@@ -26,6 +28,7 @@ class Receipt {
 
   Receipt({
     this.id,
+    this.firestoreId,
     required this.title,
     required this.date,
     required this.amount,
@@ -34,6 +37,7 @@ class Receipt {
 
   Receipt copyWith({
     int? id,
+    String? firestoreId,
     String? title,
     String? date,
     double? amount,
@@ -41,6 +45,7 @@ class Receipt {
   }) {
     return Receipt(
       id: id ?? this.id,
+      firestoreId: firestoreId ?? this.firestoreId,
       title: title ?? this.title,
       date: date ?? this.date,
       amount: amount ?? this.amount,
@@ -54,6 +59,7 @@ class Receipt {
       'date': date,
       'amount': amount,
       'notes': notes,
+      'firestore_id': firestoreId,
     };
     if (id != null) {
       map['id'] = id;
@@ -65,10 +71,33 @@ class Receipt {
     final amountValue = map['amount'];
     return Receipt(
       id: map['id'] as int?,
+      firestoreId: map['firestore_id'] as String?,
       title: map['title'] as String,
       date: map['date'] as String,
       amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
       notes: map['notes'] as String,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'date': date,
+      'amount': amount,
+      'notes': notes,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  factory Receipt.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final amountValue = data['amount'];
+    return Receipt(
+      firestoreId: doc.id,
+      title: data['title'] as String,
+      date: data['date'] as String,
+      amount: amountValue is int ? amountValue.toDouble() : amountValue as double,
+      notes: data['notes'] as String,
     );
   }
 }
@@ -88,7 +117,12 @@ class ReceiptDatabase {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future _createDB(Database db, int version) async {
@@ -98,9 +132,16 @@ class ReceiptDatabase {
         title TEXT NOT NULL,
         date TEXT NOT NULL,
         amount REAL NOT NULL,
-        notes TEXT NOT NULL
+        notes TEXT NOT NULL,
+        firestore_id TEXT
       )
     ''');
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE receipts ADD COLUMN firestore_id TEXT');
+    }
   }
 
   Future<Receipt> createReceipt(Receipt receipt) async {
@@ -115,11 +156,51 @@ class ReceiptDatabase {
     return result.map((json) => Receipt.fromMap(json)).toList();
   }
 
+  Future<void> upsertAll(List<Receipt> receipts) async {
+    final db = await instance.database;
+    await db.delete('receipts');
+    for (final receipt in receipts) {
+      await db.insert('receipts', receipt.toMap());
+    }
+  }
+
+  Future<void> clearAll() async {
+    final db = await instance.database;
+    await db.delete('receipts');
+  }
+
   Future<void> close() async {
     final db = await instance.database;
     await db.close();
     _database = null;
   }
+}
+
+class ReceiptRepository {
+  static final instance = ReceiptRepository._();
+  ReceiptRepository._();
+
+  CollectionReference<Map<String, dynamic>> _col(String uid) =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('receipts');
+
+  Future<Receipt> save(String uid, Receipt receipt) async {
+    final doc = await _col(uid).add(receipt.toFirestore());
+    final saved = receipt.copyWith(firestoreId: doc.id);
+    await ReceiptDatabase.instance.createReceipt(saved);
+    return saved;
+  }
+
+  Future<List<Receipt>> syncFromFirestore(String uid) async {
+    final snap = await _col(uid).orderBy('createdAt', descending: true).get();
+    final receipts = snap.docs.map(Receipt.fromFirestore).toList();
+    await ReceiptDatabase.instance.upsertAll(receipts);
+    return receipts;
+  }
+
+  Future<void> clearCache() => ReceiptDatabase.instance.clearAll();
 }
 
 class MyApp extends StatelessWidget {
@@ -453,6 +534,7 @@ class ReceiptListScreen extends StatefulWidget {
 
 class _ReceiptListScreenState extends State<ReceiptListScreen> {
   bool _loading = true;
+  bool _syncing = false;
   List<Receipt> _receipts = [];
 
   @override
@@ -462,12 +544,28 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   }
 
   Future<void> _loadReceipts() async {
-    final receipts = await ReceiptDatabase.instance.readAllReceipts();
+    // Phase 1: show cached data instantly
+    final cached = await ReceiptDatabase.instance.readAllReceipts();
     if (!mounted) return;
     setState(() {
-      _receipts = receipts;
+      _receipts = cached;
       _loading = false;
+      _syncing = true;
     });
+
+    // Phase 2: sync from Firestore
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final synced = await ReceiptRepository.instance.syncFromFirestore(uid);
+      if (!mounted) return;
+      setState(() {
+        _receipts = synced;
+      });
+    } catch (_) {
+      // offline or error — keep cached data
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
   }
 
   @override
@@ -476,6 +574,12 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Receipt History'),
+        bottom: _syncing
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4),
+                child: LinearProgressIndicator(),
+              )
+            : null,
       ),
       body: SafeArea(
         child: Padding(
@@ -1175,7 +1279,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (confirmed == true && mounted) {
-      await ReceiptDatabase.instance.createReceipt(receipt);
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await ReceiptRepository.instance.save(uid, receipt);
       if (!mounted) return;
       // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(this.context).showSnackBar(
@@ -1255,6 +1360,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Sign out'),
                 onTap: () async {
                   Navigator.of(context).pop();
+                  await ReceiptRepository.instance.clearCache();
                   await GoogleSignIn().signOut();
                   await FirebaseAuth.instance.signOut();
                   // AuthGate stream fires → LoginScreen
