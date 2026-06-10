@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -731,31 +735,243 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _scanAndSaveReceipt(BuildContext context) async {
-    showDialog(
+  void _showScanOptions(BuildContext context) {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => const LoadingDialog(message: 'Opening camera and NFC...'),
+      backgroundColor: const Color(0xFF1E2A4A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Choose Scan Method',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _ScanOptionButton(
+                    icon: Icons.qr_code_scanner,
+                    label: 'QR Code',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _startQrScan(context);
+                    },
+                  ),
+                  _ScanOptionButton(
+                    icon: Icons.nfc,
+                    label: 'NFC',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _startNfcScan(context);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
     );
+  }
 
-    await Future.delayed(const Duration(milliseconds: 1400));
+  Future<void> _startQrScan(BuildContext context) async {
+    final raw = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+    if (raw == null || !mounted) return;
+    final receipt = _parseReceiptPayload(raw);
+    if (receipt != null) {
+      // ignore: use_build_context_synchronously
+      await _showReceiptConfirmation(this.context, receipt);
+    } else {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('Could not read receipt data from QR code.')),
+      );
+    }
+  }
+
+  Future<void> _startNfcScan(BuildContext context) async {
+    final availability = await NfcManager.instance.checkAvailability();
     if (!mounted) return;
-    final currentContext = this.context;
-    // ignore: use_build_context_synchronously
-    Navigator.of(currentContext).pop();
-
-    final receipt = Receipt(
-      title: 'Receipt ${DateTime.now().millisecondsSinceEpoch}',
-      date: DateTime.now().toIso8601String(),
-      amount: 24.99,
-      notes: 'Saved after scan',
-    );
-    await ReceiptDatabase.instance.createReceipt(receipt);
+    if (availability != NfcAvailability.available) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('NFC is not available on this device.')),
+      );
+      return;
+    }
 
     // ignore: use_build_context_synchronously
-    ScaffoldMessenger.of(currentContext).showSnackBar(
-      const SnackBar(content: Text('Saved receipt to history.')),
+    showDialog(
+      context: this.context,
+      barrierDismissible: true,
+      builder: (ctx) => PopScope(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) NfcManager.instance.stopSession();
+        },
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1E2A4A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: const Text('NFC Scan', style: TextStyle(color: Colors.white)),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.nfc, size: 72, color: Colors.white70),
+              SizedBox(height: 16),
+              Text(
+                'Hold your device near an NFC terminal...',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                NfcManager.instance.stopSession();
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
     );
+
+    NfcManager.instance.startSession(
+      onDiscovered: (NfcTag tag) async {
+        String? text;
+        try {
+          final ndef = Ndef.from(tag);
+          if (ndef != null) {
+            final msg = ndef.cachedMessage ?? await ndef.read();
+            text = _extractNdefText(msg);
+          }
+        } catch (_) {}
+
+        await NfcManager.instance.stopSession();
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        Navigator.of(this.context).pop();
+
+        if (text != null) {
+          final receipt = _parseReceiptPayload(text);
+          if (receipt != null && mounted) {
+            // ignore: use_build_context_synchronously
+            await _showReceiptConfirmation(this.context, receipt);
+          } else if (mounted) {
+            // ignore: use_build_context_synchronously
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              const SnackBar(content: Text('Could not read receipt data from NFC tag.')),
+            );
+          }
+        } else if (mounted) {
+          // ignore: use_build_context_synchronously
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            const SnackBar(content: Text('No readable data found on NFC tag.')),
+          );
+        }
+      },
+    );
+  }
+
+  String? _extractNdefText(NdefMessage message) {
+    for (final record in message.records) {
+      final payload = record.payload;
+      if (payload.isEmpty) continue;
+      try {
+        final typeStr = String.fromCharCodes(record.type);
+        if (typeStr == 'T') {
+          final langLen = payload[0] & 0x3F;
+          return utf8.decode(payload.sublist(1 + langLen));
+        }
+        if (typeStr == 'U') {
+          return utf8.decode(payload.sublist(1));
+        }
+        return utf8.decode(payload);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  Receipt? _parseReceiptPayload(String raw) {
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return Receipt(
+        title: map['title'] as String? ?? 'Scanned Receipt',
+        date: map['date'] as String? ?? DateTime.now().toIso8601String(),
+        amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+        notes: map['notes'] as String? ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _showReceiptConfirmation(BuildContext context, Receipt receipt) async {
+    final date = DateTime.tryParse(receipt.date);
+    final formattedDate = date != null
+        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
+        : receipt.date;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF1E2A4A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Save Receipt?',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 20),
+              _ReceiptDetailRow(label: 'Merchant', value: receipt.title),
+              _ReceiptDetailRow(label: 'Amount', value: '\$${receipt.amount.toStringAsFixed(2)}'),
+              _ReceiptDetailRow(label: 'Date', value: formattedDate),
+              if (receipt.notes.isNotEmpty) _ReceiptDetailRow(label: 'Notes', value: receipt.notes),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: const Text('Save to History'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await ReceiptDatabase.instance.createReceipt(receipt);
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('Receipt saved to history.')),
+      );
+    }
   }
 
   Future<void> _performAction(
@@ -844,9 +1060,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      _scanAndSaveReceipt(context);
-                    },
+                    onPressed: () => _showScanOptions(context),
                     icon: const Icon(Icons.qr_code_scanner, size: 28),
                     label: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16, horizontal: 12),
@@ -879,6 +1093,133 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class QrScannerScreen extends StatefulWidget {
+  const QrScannerScreen({super.key});
+
+  @override
+  State<QrScannerScreen> createState() => _QrScannerScreenState();
+}
+
+class _QrScannerScreenState extends State<QrScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController();
+  bool _detected = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Scan QR Code'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: (capture) {
+              if (_detected) return;
+              final barcode = capture.barcodes.firstOrNull;
+              if (barcode?.rawValue != null) {
+                _detected = true;
+                Navigator.of(context).pop(barcode!.rawValue);
+              }
+            },
+          ),
+          Center(
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white54, width: 2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const Positioned(
+            bottom: 32,
+            left: 0,
+            right: 0,
+            child: Text(
+              'Align QR code within the frame',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScanOptionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ScanOptionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 120,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 40, color: Colors.white),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReceiptDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReceiptDetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 14)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          ),
+        ],
       ),
     );
   }
