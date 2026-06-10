@@ -12,6 +12,7 @@ import '../widgets/loading_dialog.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
 import 'analytics_screen.dart';
+import 'budget_screen.dart';
 import 'help_screen.dart';
 import 'ocr_scanner_screen.dart';
 import 'profile_screen.dart';
@@ -367,6 +368,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const HelpScreen()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Budgets'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BudgetScreen()),
                   );
                 },
               ),

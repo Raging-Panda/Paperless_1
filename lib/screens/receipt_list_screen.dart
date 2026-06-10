@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
@@ -26,6 +27,103 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   DateTime? _filterEnd;
   SortOrder _sortOrder = AppSettings.instance.sortOrder;
   String? _selectedCategory;
+
+  // ── Bulk selection ────────────────────────────────────────────────────────
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  String _receiptId(Receipt r) =>
+      r.firestoreId ?? r.id?.toString() ?? '${r.title}-${r.date}';
+  bool _isSelected(Receipt r) => _selectedIds.contains(_receiptId(r));
+
+  List<Receipt> get _selectedReceipts =>
+      _filtered.where((r) => _isSelected(r)).toList();
+
+  void _enterSelectionMode(Receipt r) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(_receiptId(r));
+    });
+  }
+
+  void _exitSelectionMode() =>
+      setState(() { _selectionMode = false; _selectedIds.clear(); });
+
+  void _toggleSelection(Receipt r) {
+    final id = _receiptId(r);
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _bulkDelete() async {
+    final receipts = _selectedReceipts;
+    if (receipts.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E2A4A),
+        title: Text(
+            'Delete ${receipts.length} receipt${receipts.length > 1 ? 's' : ''}?'),
+        content: const Text(
+          'These receipts will be permanently removed.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete',
+                  style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final count = receipts.length;
+    _exitSelectionMode();
+    for (final r in receipts) {
+      setState(() => _receipts.remove(r));
+      try {
+        await ReceiptRepository.instance.delete(uid, r);
+      } catch (_) {
+        if (mounted) setState(() => _receipts.add(r));
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$count receipt${count > 1 ? 's' : ''} deleted.')),
+      );
+    }
+  }
+
+  Future<void> _bulkExport() async {
+    final receipts = _selectedReceipts;
+    if (receipts.isEmpty) return;
+    final sym = AppSettings.instance.currencySymbol;
+    final buf = StringBuffer()
+      ..writeln('Title,Date,Amount,Category,Notes');
+    for (final r in receipts) {
+      final t = r.title.replaceAll('"', '""');
+      final n = r.notes.replaceAll('"', '""');
+      final c = (r.category ?? '').replaceAll('"', '""');
+      buf.writeln('"$t","${r.date}",${r.amount},"$c","$n"');
+    }
+    _exitSelectionMode();
+    await Share.share(
+      buf.toString(),
+      subject:
+          'Receipts export (${receipts.length} item${receipts.length > 1 ? 's' : ''})',
+    );
+  }
 
   bool get _filterActive => _filterStart != null || _filterEnd != null;
 
@@ -250,14 +348,41 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_selectionMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _exitSelectionMode();
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddReceipt,
-        tooltip: 'Add receipt',
-        child: const Icon(Icons.add),
-      ),
-      appBar: AppBar(
+      floatingActionButton: _selectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _openAddReceipt,
+              tooltip: 'Add receipt',
+              child: const Icon(Icons.add),
+            ),
+      appBar: _selectionMode
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelectionMode,
+              ),
+              title: Text('${_selectedIds.length} selected'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.ios_share_outlined),
+                  tooltip: 'Export CSV',
+                  onPressed: _bulkExport,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete',
+                  onPressed: _bulkDelete,
+                ),
+              ],
+            )
+          : AppBar(
         title: const Text('Receipt History'),
         actions: [
           PopupMenuButton<SortOrder>(
@@ -440,6 +565,49 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                     final formattedDate = date != null
                                         ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
                                         : receipt.date;
+                                    final amtText =
+                                        '${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}';
+                                    if (_selectionMode) {
+                                      final selected = _isSelected(receipt);
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 12),
+                                        child: Stack(
+                                          children: [
+                                            Card(
+                                              color: selected
+                                                  ? Colors.deepPurple.withValues(alpha: 0.35)
+                                                  : const Color.fromRGBO(255, 255, 255, 0.08),
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(16)),
+                                              child: ListTile(
+                                                contentPadding: const EdgeInsets.symmetric(
+                                                    horizontal: 16, vertical: 12),
+                                                onTap: () => _toggleSelection(receipt),
+                                                title: Text(receipt.title,
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold)),
+                                                subtitle: Text(
+                                                    '$formattedDate · ${receipt.notes}',
+                                                    style: const TextStyle(
+                                                        color: Colors.white70)),
+                                                trailing: Text(amtText,
+                                                    style: const TextStyle(
+                                                        color: Colors.white)),
+                                              ),
+                                            ),
+                                            if (selected)
+                                              const Positioned(
+                                                top: 10,
+                                                right: 10,
+                                                child: Icon(Icons.check_circle,
+                                                    color: Colors.deepPurpleAccent,
+                                                    size: 22),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    }
                                     return Padding(
                                       padding: const EdgeInsets.only(bottom: 12),
                                       child: Dismissible(
@@ -456,17 +624,29 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                             color: Colors.redAccent.withValues(alpha: 0.85),
                                             borderRadius: BorderRadius.circular(16),
                                           ),
-                                          child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                                          child: const Icon(Icons.delete_outline,
+                                              color: Colors.white, size: 28),
                                         ),
                                         child: Card(
                                           color: const Color.fromRGBO(255, 255, 255, 0.08),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16)),
                                           child: ListTile(
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            contentPadding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 12),
                                             onTap: () => _openDetail(receipt),
-                                            title: Text(receipt.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                            subtitle: Text('$formattedDate · ${receipt.notes}', style: const TextStyle(color: Colors.white70)),
-                                            trailing: Text('${AppSettings.instance.currencySymbol}${receipt.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                                            onLongPress: () => _enterSelectionMode(receipt),
+                                            title: Text(receipt.title,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold)),
+                                            subtitle: Text(
+                                                '$formattedDate · ${receipt.notes}',
+                                                style: const TextStyle(
+                                                    color: Colors.white70)),
+                                            trailing: Text(amtText,
+                                                style: const TextStyle(
+                                                    color: Colors.white)),
                                           ),
                                         ),
                                       ),
@@ -479,7 +659,8 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
           ),
         ),
       ),
-    );
+      ),   // Scaffold
+    );     // PopScope
   }
 }
 

@@ -5,6 +5,7 @@ import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../settings/app_settings.dart';
+import 'budget_screen.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -89,7 +90,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: AppBar(
+        title: const Text('Analytics'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Set budgets',
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const BudgetScreen()))
+                .then((_) => setState(() {})), // refresh after returning
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _receipts.isEmpty
@@ -215,9 +227,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           style: TextStyle(color: Colors.white38));
     }
     final grandTotal = cats.fold(0.0, (s, c) => s + c.total);
+    final budgets = AppSettings.instance.budgets;
     return Column(
       children: cats.map((c) {
-        final pct = grandTotal > 0 ? c.total / grandTotal : 0.0;
+        final spendPct = grandTotal > 0 ? c.total / grandTotal : 0.0;
+        final budget = budgets[c.category];
+        final hasBudget = budget != null && budget > 0;
+        final budgetPct = hasBudget ? (c.total / budget!).clamp(0.0, 2.0) : 0.0;
+        final isOver = hasBudget && c.total > budget!;
+        final isNear = hasBudget && budgetPct >= 0.75 && !isOver;
+        Color barColor = Colors.deepPurpleAccent;
+        if (isOver) barColor = Colors.redAccent;
+        else if (isNear) barColor = Colors.orangeAccent;
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -225,7 +247,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(
+                color: isOver
+                    ? Colors.redAccent.withValues(alpha: 0.5)
+                    : Colors.white12,
+              ),
             ),
             child: Column(
               children: [
@@ -240,22 +266,52 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         style: const TextStyle(
                             color: Colors.white, fontSize: 14)),
                     const SizedBox(width: 8),
-                    Text('${(pct * 100).toStringAsFixed(0)}%',
-                        style: const TextStyle(
-                            color: Colors.white38, fontSize: 12)),
+                    if (hasBudget)
+                      Text(
+                        isOver
+                            ? '+${_fmt(c.total - budget!)} over'
+                            : '${_fmt(budget! - c.total)} left',
+                        style: TextStyle(
+                          color: isOver
+                              ? Colors.redAccent
+                              : isNear
+                                  ? Colors.orangeAccent
+                                  : Colors.white38,
+                          fontSize: 12,
+                        ),
+                      )
+                    else
+                      Text('${(spendPct * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: pct,
+                    value: hasBudget
+                        ? budgetPct.clamp(0.0, 1.0)
+                        : spendPct,
                     minHeight: 6,
                     backgroundColor: Colors.white12,
-                    valueColor: const AlwaysStoppedAnimation(
-                        Colors.deepPurpleAccent),
+                    valueColor: AlwaysStoppedAnimation(barColor),
                   ),
                 ),
+                if (hasBudget)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Budget: ${_fmt(budget!)} / mo',
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
