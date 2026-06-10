@@ -1353,6 +1353,7 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -1362,6 +1363,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
@@ -1376,6 +1378,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      final name = _nameController.text.trim();
+      if (name.isNotEmpty) {
+        await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+      }
       // AuthGate stream fires → navigates automatically; pop sign-up screen
       if (mounted) Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
@@ -1417,6 +1423,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     style: TextStyle(fontSize: 15, color: Colors.white70),
                   ),
                   const SizedBox(height: 32),
+                  TextFormField(
+                    controller: _nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Display name',
+                      hintText: 'Your name',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter your name' : null,
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
