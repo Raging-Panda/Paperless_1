@@ -11,6 +11,7 @@ class AppSettings {
   static const _keySort = 'sort_order';
   static const _keyBiometric = 'biometric_enabled';
   static const _keyTheme = 'theme_mode';
+  static const _keyOnboarding = 'onboarding_complete';
 
   String _currencySymbol = r'$';
   String get currencySymbol => _currencySymbol;
@@ -20,6 +21,9 @@ class AppSettings {
 
   bool _biometricEnabled = false;
   bool get biometricEnabled => _biometricEnabled;
+
+  bool _onboardingComplete = false;
+  bool get onboardingComplete => _onboardingComplete;
 
   late ValueNotifier<ThemeMode> themeNotifier;
 
@@ -31,6 +35,7 @@ class AppSettings {
       orElse: () => SortOrder.dateDesc,
     );
     _biometricEnabled = prefs.getBool(_keyBiometric) ?? false;
+    _onboardingComplete = prefs.getBool(_keyOnboarding) ?? false;
     themeNotifier = ValueNotifier(
       ThemeMode.values.firstWhere(
         (e) => e.name == prefs.getString(_keyTheme),
@@ -61,5 +66,11 @@ class AppSettings {
     _biometricEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyBiometric, enabled);
+  }
+
+  Future<void> setOnboardingComplete() async {
+    _onboardingComplete = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyOnboarding, true);
   }
 }

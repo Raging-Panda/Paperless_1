@@ -13,6 +13,7 @@ import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
 import 'analytics_screen.dart';
 import 'help_screen.dart';
+import 'ocr_scanner_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'receipt_list_screen.dart';
@@ -70,6 +71,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              ScanOptionButton(
+                icon: Icons.document_scanner_outlined,
+                label: 'Camera OCR',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _startOcrScan(context);
+                },
               ),
               const SizedBox(height: 8),
             ],
@@ -179,6 +189,15 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
     );
+  }
+
+  Future<void> _startOcrScan(BuildContext context) async {
+    final receipt = await Navigator.of(context).push<Receipt>(
+      MaterialPageRoute(builder: (_) => const OcrScannerScreen()),
+    );
+    if (receipt == null || !mounted) return;
+    // ignore: use_build_context_synchronously
+    await _showReceiptConfirmation(this.context, receipt);
   }
 
   String? _extractNdefText(NdefMessage message) {

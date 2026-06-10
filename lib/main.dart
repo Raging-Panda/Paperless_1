@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
-import 'screens/auth_gate.dart';
+import 'screens/root_gate.dart';
 import 'settings/app_settings.dart';
 import 'widgets/offline_banner.dart';
 
@@ -132,7 +132,7 @@ class MyApp extends StatelessWidget {
             ],
           );
         },
-        home: const AuthGate(),
+        home: const RootGate(),
       ),
     );
   }
