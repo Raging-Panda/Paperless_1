@@ -30,8 +30,55 @@ App Design Overview The app I are designing is a modern solution aimed at stream
 - Welcome screen text color change, cannot see text with light background.
 
 ### Gamification & Engagement
-- Badge system for users to encourage more usage and engagement.
-- Rewards system: users earn points or unlock discount vouchers at participating stores based on scan activity and scan streaks. Encourages consistent app usage and creates a partnership incentive for retailers.
+
+**Core Loop**
+Every scan earns XP. XP fills a progress bar toward the next level. Levels unlock badges, reward eligibility, and profile cosmetics.
+
+**Points & Multipliers**
+- Base XP per scan.
+- Streak multiplier — longer active streak increases XP earned per scan.
+- Bonus XP for first scan at a new store.
+- Bonus XP for completing a weekly challenge.
+- Receipt quality bonus — extra XP when a receipt has a matched store logo, assigned category, and complete data.
+
+**Tiers / Levels**
+A progression ladder (e.g. Bronze → Silver → Gold → Platinum → Eco Elite). Higher tiers unlock better reward vouchers, profile customisation options, and streak shield allowances.
+
+**Badges & Achievements**
+- *First Scan* — onboarding hook.
+- *7-Day Streak*, *30-Day Streak* — retention milestones.
+- *Explorer* — scanned at X different stores.
+- *Loyal Regular* — 50 scans at the same store.
+- *Eco Warrior* — 100 paperless receipts captured.
+- *Budget Master* — stayed under budget for a full month.
+- *Green Giant* — X kg of paper saved (calculated from receipt count).
+- *Store-specific badges* — scan at a particular retailer enough times to earn a branded badge (e.g. "Woolies Regular"); retailers can sponsor these.
+- *Seasonal / limited-edition badges* — holiday events and special periods (Black Friday Scanner, December Spree) with exclusive badges not earnable outside that window.
+
+**Streaks**
+- Daily scan streak counter displayed prominently on the home screen.
+- Streak shields — earned or unlocked by tier — protect a streak if the user misses a day.
+- Streak-at-risk push notification — "You haven't scanned today, your 12-day streak is at risk."
+
+**Weekly Challenges**
+Rotating short-term goals (e.g. "Scan at 3 different stores this week", "Log a receipt over R500"). Completing a challenge triggers a mystery reward reveal (scratch-card mechanic) for a randomised bonus — extra XP, a voucher, or a badge. Variable reward loop drives re-engagement.
+
+**Environmental Impact Tracker**
+Surfacing a live "paper saved" counter (sheets, grams, CO2 equivalent) on the profile screen ties gamification directly to the app's eco-friendly core purpose. Lifetime stats — total scans, total paper saved, longest streak ever — are shown as a persistent trophy shelf.
+
+**Social & Competitive**
+- Friends leaderboard — weekly XP rankings among friends.
+- Direct friend challenge — "who can scan more this week."
+- Referral bonus — invite a friend who completes their first scan and both accounts earn bonus XP. Organic growth mechanic.
+
+**Onboarding Quest Line**
+Guided starter missions walk new users through app features (link an account, scan a first receipt, set a budget) while rewarding each completed step. Reduces drop-off during onboarding.
+
+**Rewards Redemption**
+Points redeemable for partner store discount vouchers and optionally for environmental/charitable donations, reinforcing the eco angle.
+
+**Annual "Wrapped" Recap**
+A shareable end-of-year card showing total scans, paper saved, top stores visited, longest streak, and badges earned. Combines gamification with the financial intelligence features and is designed to be shared on social media.
 
 ### Receipt Management
 - Store logo on scanned/fetched receipts for better visual identification in the receipt list.
