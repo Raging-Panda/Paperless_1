@@ -205,6 +205,16 @@ class GamificationService {
     );
   }
 
+  /// Adds [count] streak shields to the user's profile.
+  Future<GamificationProfile> addShield(String uid, int count) async {
+    final current = await getProfile(uid);
+    final updated = current.copyWith(
+        streakShields: current.streakShields + count);
+    _cached = updated;
+    _persist(uid, updated);
+    return updated;
+  }
+
   void clearCache() => _cached = null;
 
   // ── Helpers ────────────────────────────────────────────────────────────────

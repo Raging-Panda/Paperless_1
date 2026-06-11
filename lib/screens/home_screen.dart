@@ -16,6 +16,9 @@ import '../models/gamification_profile.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/badge_unlock_dialog.dart';
+import '../models/challenge.dart';
+import '../services/challenge_service.dart';
+import '../screens/challenges_screen.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
@@ -37,6 +40,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   GamificationProfile? _gamProfile;
+  int _pendingChallengeCount = 0;
 
   @override
   void initState() {
@@ -49,7 +53,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final profile = await GamificationService.instance.getProfile(uid);
-    if (mounted) setState(() => _gamProfile = profile);
+    final pending = await ChallengeService.instance.getPendingRewardCount(uid);
+    if (mounted) {
+      setState(() {
+        _gamProfile = profile;
+        _pendingChallengeCount = pending;
+      });
+    }
   }
 
   void _openProfile(BuildContext context) {
@@ -326,8 +336,13 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         await ReceiptRepository.instance.save(uid, receipt);
         final xpResult = await GamificationService.instance.onReceiptSaved(uid, receipt);
+        final completedChallenges =
+            await ChallengeService.instance.onReceiptSaved(uid, receipt);
         if (!mounted) return;
-        setState(() => _gamProfile = xpResult.updatedProfile);
+        setState(() {
+          _gamProfile = xpResult.updatedProfile;
+          _pendingChallengeCount += completedChallenges.length;
+        });
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text('Receipt saved · ${xpResult.message}')),
@@ -336,6 +351,23 @@ class _HomeScreenState extends State<HomeScreen> {
         await showLevelUpIfNeeded(this.context, xpResult);
         // ignore: use_build_context_synchronously
         await showBadgeUnlocksIfAny(this.context, xpResult.newlyUnlockedBadges);
+        if (completedChallenges.isNotEmpty && mounted) {
+          // ignore: use_build_context_synchronously
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Challenge complete! ${completedChallenges.first.title} — collect your reward.'),
+              action: SnackBarAction(
+                label: 'View',
+                // ignore: use_build_context_synchronously
+                onPressed: () => Navigator.of(this.context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const ChallengesScreen()),
+                ),
+              ),
+            ),
+          );
+        }
       } catch (_) {
         if (!mounted) return;
         // ignore: use_build_context_synchronously
@@ -411,6 +443,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const HelpScreen()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.emoji_events_outlined),
+                title: const Text('Challenges'),
+                trailing: _pendingChallengeCount > 0
+                    ? CircleAvatar(
+                        radius: 10,
+                        backgroundColor: Colors.orange,
+                        child: Text(
+                          '$_pendingChallengeCount',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    : null,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const ChallengesScreen()),
                   );
                 },
               ),
@@ -501,6 +557,44 @@ class _HomeScreenState extends State<HomeScreen> {
                           minimumSize: const Size(220, 56),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      Stack(
+                        alignment: Alignment.topRight,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const ChallengesScreen()),
+                              );
+                            },
+                            icon: const Icon(Icons.emoji_events_outlined),
+                            label: const Text('Challenges',
+                                style: TextStyle(fontSize: 16)),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(220, 56),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                          if (_pendingChallengeCount > 0)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: CircleAvatar(
+                                radius: 9,
+                                backgroundColor: Colors.orange,
+                                child: Text(
+                                  '$_pendingChallengeCount',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),

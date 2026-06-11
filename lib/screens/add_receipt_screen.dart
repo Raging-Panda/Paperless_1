@@ -8,6 +8,8 @@ import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/badge_unlock_dialog.dart';
+import '../models/challenge.dart';
+import '../services/challenge_service.dart';
 import '../settings/app_settings.dart';
 
 class AddReceiptScreen extends StatefulWidget {
@@ -135,6 +137,16 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           );
           await showLevelUpIfNeeded(context, xpResult);
           await showBadgeUnlocksIfAny(context, xpResult.newlyUnlockedBadges);
+          final completedChallenges =
+              await ChallengeService.instance.onReceiptSaved(uid, saved);
+          if (completedChallenges.isNotEmpty && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Challenge complete! ${completedChallenges.first.title} — check Challenges for your reward.'),
+              ),
+            );
+          }
         }
       }
       if (!mounted) return;
