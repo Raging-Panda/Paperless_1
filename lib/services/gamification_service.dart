@@ -9,6 +9,7 @@ class XpAwardResult {
   final double multiplierApplied;
   final int newStreak;
   final GamificationProfile updatedProfile;
+  final int previousLevel;
 
   const XpAwardResult({
     required this.xpEarned,
@@ -16,7 +17,14 @@ class XpAwardResult {
     required this.multiplierApplied,
     required this.newStreak,
     required this.updatedProfile,
+    required this.previousLevel,
   });
+
+  bool get leveledUp => updatedProfile.level > previousLevel;
+
+  bool get tieredUp =>
+      leveledUp &&
+      updatedProfile.tier != GamificationProfile.tierForLevel(previousLevel);
 
   /// Short human-readable summary, e.g. "+18 XP · New store! · 1.5x streak"
   String get message {
@@ -79,6 +87,7 @@ class GamificationService {
   /// detailed [XpAwardResult].
   Future<XpAwardResult> onReceiptSaved(String uid, Receipt receipt) async {
     final current = await getProfile(uid);
+    final previousLevel = current.level;
 
     // ── Streak ──────────────────────────────────────────────────────────────
     final newStreak = _computeStreak(current);
@@ -117,6 +126,7 @@ class GamificationService {
       multiplierApplied: multiplier,
       newStreak: newStreak,
       updatedProfile: updated,
+      previousLevel: previousLevel,
     );
   }
 

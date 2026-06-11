@@ -412,6 +412,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (_gamProfile != null) ...[
                 const SizedBox(height: 24),
                 _XpCard(profile: _gamProfile!),
+                const SizedBox(height: 16),
+                _sectionLabel('Progress'),
+                const SizedBox(height: 10),
+                _TierLadder(profile: _gamProfile!),
               ],
 
               // ── Quick stats ──────────────────────────────────────────
@@ -795,6 +799,162 @@ class _XpCard extends StatelessWidget {
           Text(
             '${profile.xpInCurrentLevel} / ${profile.xpForNextLevel} XP to Level ${profile.level + 1}',
             style: const TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TierLadder extends StatelessWidget {
+  final GamificationProfile profile;
+  const _TierLadder({required this.profile});
+
+  static const _order = [
+    'Bronze',
+    'Silver',
+    'Gold',
+    'Platinum',
+    'Eco Elite',
+  ];
+
+  bool _isPast(String name) =>
+      _order.indexOf(name) < _order.indexOf(profile.tier);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        children: GamificationProfile.tierDescriptions.map((info) {
+          final name = info['name']!;
+          final isCurrent = profile.tier == name;
+          final isPast = _isPast(name);
+          return _TierRow(
+            name: name,
+            levels: info['levels']!,
+            description: info['description']!,
+            tierColor: GamificationProfile.colorForTier(name),
+            isCurrent: isCurrent,
+            isPast: isPast,
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _TierRow extends StatelessWidget {
+  final String name;
+  final String levels;
+  final String description;
+  final Color tierColor;
+  final bool isCurrent;
+  final bool isPast;
+  const _TierRow({
+    required this.name,
+    required this.levels,
+    required this.description,
+    required this.tierColor,
+    required this.isCurrent,
+    required this.isPast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLocked = !isCurrent && !isPast;
+    final subColor = isLocked ? Colors.white12 : Colors.white54;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status circle
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isCurrent ? tierColor.withValues(alpha: 0.2) : Colors.transparent,
+              border: Border.all(
+                color: isPast
+                    ? tierColor.withValues(alpha: 0.6)
+                    : isCurrent
+                        ? tierColor
+                        : Colors.white12,
+                width: isCurrent ? 2 : 1,
+              ),
+            ),
+            child: Icon(
+              isPast
+                  ? Icons.check
+                  : isCurrent
+                      ? Icons.circle
+                      : Icons.lock_outline,
+              size: 15,
+              color: isPast
+                  ? tierColor.withValues(alpha: 0.8)
+                  : isCurrent
+                      ? tierColor
+                      : Colors.white24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: isCurrent || isPast ? tierColor : Colors.white24,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Lv $levels',
+                      style: TextStyle(color: subColor, fontSize: 11),
+                    ),
+                    if (isCurrent) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: tierColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'CURRENT',
+                          style: TextStyle(
+                            color: tierColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: TextStyle(
+                      color: subColor, fontSize: 11, height: 1.4),
+                ),
+              ],
+            ),
           ),
         ],
       ),

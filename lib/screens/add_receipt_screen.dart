@@ -6,6 +6,7 @@ import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
+import '../widgets/level_up_dialog.dart';
 import '../settings/app_settings.dart';
 
 class AddReceiptScreen extends StatefulWidget {
@@ -131,6 +132,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(xpResult.message)),
           );
+          await showLevelUpIfNeeded(context, xpResult);
         }
       }
       if (!mounted) return;

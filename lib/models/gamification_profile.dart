@@ -96,4 +96,60 @@ class GamificationProfile {
         return Colors.grey;
     }
   }
+
+  /// Returns the tier name for a given level (mirrors the [tier] getter).
+  static String tierForLevel(int level) {
+    if (level <= 5) return 'Bronze';
+    if (level <= 10) return 'Silver';
+    if (level <= 20) return 'Gold';
+    if (level <= 30) return 'Platinum';
+    return 'Eco Elite';
+  }
+
+  /// Returns the tier colour for a given tier name.
+  static Color colorForTier(String name) {
+    switch (name) {
+      case 'Bronze':
+        return const Color(0xFFCD7F32);
+      case 'Silver':
+        return const Color(0xFFC0C0C0);
+      case 'Gold':
+        return const Color(0xFFFFD700);
+      case 'Platinum':
+        return const Color(0xFFE5E4E2);
+      case 'Eco Elite':
+        return const Color(0xFF00C853);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  /// Ordered list of all tier metadata used by UI components.
+  static const List<Map<String, String>> tierDescriptions = [
+    {
+      'name': 'Bronze',
+      'levels': '1–5',
+      'description': 'Welcome to Paperless! Every receipt earns XP.',
+    },
+    {
+      'name': 'Silver',
+      'levels': '6–10',
+      'description': 'Streak shields unlock — protect your streak once a week.',
+    },
+    {
+      'name': 'Gold',
+      'levels': '11–20',
+      'description': 'Priority access to partner discount rewards.',
+    },
+    {
+      'name': 'Platinum',
+      'levels': '21–30',
+      'description': 'Exclusive profile themes and premium rewards.',
+    },
+    {
+      'name': 'Eco Elite',
+      'levels': '31+',
+      'description': 'Elite status — maximum streak multiplier and all perks unlocked.',
+    },
+  ];
 }
