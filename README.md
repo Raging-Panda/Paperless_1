@@ -23,19 +23,41 @@ App Design Overview The app I are designing is a modern solution aimed at stream
 
 
 
-## Future Development
+## Feature Development
 
-Welcome screen text color change, cannot see text with light background. 
+### UX & Polish
+- Between screen transitions, add a loading spinner to indicate that the app is processing the transaction and fetching the receipt data. This will enhance the user experience by providing feedback during potentially long operations.
+- Welcome screen text color change, cannot see text with light background.
 
-Badge (gamification) system.
+### Gamification & Engagement
+- Badge system for users to encourage more usage and engagement.
+- Rewards system: users earn points or unlock discount vouchers at participating stores based on scan activity and scan streaks. Encourages consistent app usage and creates a partnership incentive for retailers.
 
-Store Logo of Scanning fetched.
+### Receipt Management
+- Store logo on scanned/fetched receipts for better visual identification in the receipt list.
+- Online transactions like Takealot, Uber, etc. will not have a physical receipt to scan, so the app can integrate with email or bank APIs to automatically fetch digital receipts for online purchases.
+- Filter by company or store name in the receipt list to allow users to easily find specific transactions.
+- Tags and custom categories (e.g. Groceries, Work, Entertainment) applied to receipts for filtering and reporting.
+- Receipt OCR and item-level detail extraction so users can search for a specific product, not just a store name.
 
-online transactions saved
+### Store & Company Profiles
+- Companies have their own profile for terms and conditions for returns/refunds, warranty information, etc. which can be accessed from the receipt details screen.
+- Return and warranty reminders: push notification when a return window (e.g. 30 days) or warranty period is nearing expiry, calculated from the receipt date. Ties directly into company profiles.
 
-Filter by company.
+### Financial Intelligence
+- Spending analytics: charts and breakdowns of spending by store, category, and time period. The receipt data is already captured; visualising it adds significant value.
+- Budget alerts: set monthly spending limits per store or category, with notifications when approaching the limit.
+- Tax and expense export: export receipts as PDF or CSV, grouped by category or date range, for expense claims or tax filing.
 
-Companies have their own "profile" for terms and conditions for returns/refunds ect
+### Social & Sharing
+- Split receipt: divide a receipt between contacts and track who owes what, useful for shared grocery runs or group meals.
+- Household sharing: a shared receipt vault for family members so one scan covers the whole household record.
+
+### Loyalty & Payments
+- Loyalty card wallet: store and display loyalty and rewards cards alongside receipts, a natural companion to the NFC/QR scanning flow.
+
+### Reliability
+- Offline mode: cache receipts locally so users can view their history without a connection and sync when back online.
 
 
 
