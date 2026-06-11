@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../settings/app_settings.dart';
+import '../models/gamification_profile.dart';
+import '../services/gamification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -26,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int? _receiptCount;
   double? _monthlySpend;
   int? _categoryCount;
+  GamificationProfile? _gamProfile;
 
   @override
   void initState() {
@@ -47,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadStats() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final receipts = await ReceiptDatabase.instance.readAllReceipts();
     final now = DateTime.now();
     final spend = receipts.where((r) {
@@ -55,11 +59,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }).fold(0.0, (s, r) => s + r.amount);
     final cats =
         receipts.where((r) => r.category != null).map((r) => r.category!).toSet();
+
+    GamificationProfile? gam;
+    if (uid != null) {
+      gam = await GamificationService.instance.getProfile(uid);
+    }
+
     if (mounted) {
       setState(() {
         _receiptCount = receipts.length;
         _monthlySpend = spend;
         _categoryCount = cats.length;
+        _gamProfile = gam;
       });
     }
   }
@@ -397,6 +408,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              // ── XP progress ──────────────────────────────────────────
+              if (_gamProfile != null) ...[
+                const SizedBox(height: 24),
+                _XpCard(profile: _gamProfile!),
+              ],
+
               // ── Quick stats ──────────────────────────────────────────
               const SizedBox(height: 28),
               Row(
@@ -707,6 +724,80 @@ class _ProviderBadge extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   height: 1))
           : const Icon(Icons.email_outlined, size: 11, color: Colors.blueGrey),
+    );
+  }
+}
+
+class _XpCard extends StatelessWidget {
+  final GamificationProfile profile;
+  const _XpCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final tier = profile.tier;
+    final tierColor = profile.tierColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tierColor.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tierColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: tierColor.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  tier,
+                  style: TextStyle(
+                    color: tierColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Level ${profile.level}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${profile.totalXP} XP',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: profile.levelProgress,
+              minHeight: 6,
+              backgroundColor: Colors.white12,
+              valueColor: AlwaysStoppedAnimation<Color>(tierColor),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${profile.xpInCurrentLevel} / ${profile.xpForNextLevel} XP to Level ${profile.level + 1}',
+            style: const TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 }

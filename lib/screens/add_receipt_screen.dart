@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
+import '../services/gamification_service.dart';
 import '../settings/app_settings.dart';
 
 class AddReceiptScreen extends StatefulWidget {
@@ -125,6 +126,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
               : null,
         );
         saved = await ReceiptRepository.instance.save(uid, receipt, localPhotoPath: _localPhotoPath);
+        GamificationService.instance.onReceiptSaved(uid).ignore();
       }
       if (!mounted) return;
       Navigator.of(context).pop(saved);

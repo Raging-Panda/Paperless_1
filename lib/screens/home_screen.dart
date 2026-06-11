@@ -11,6 +11,7 @@ import 'package:ndef_record/ndef_record.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
+import '../services/gamification_service.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
@@ -310,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final uid = FirebaseAuth.instance.currentUser!.uid;
       try {
         await ReceiptRepository.instance.save(uid, receipt);
+        GamificationService.instance.onReceiptSaved(uid).ignore();
         if (!mounted) return;
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(this.context).showSnackBar(
