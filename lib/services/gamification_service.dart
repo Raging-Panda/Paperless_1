@@ -154,6 +154,7 @@ class GamificationService {
       storeScanCounts: updatedCounts,
       totalScans: current.totalScans + 1,
       streakShields: current.streakShields - (shieldUsed ? 1 : 0),
+      longestStreak: newStreak > current.longestStreak ? newStreak : current.longestStreak,
     );
 
     // ── Badge unlock check ───────────────────────────────────────────────────

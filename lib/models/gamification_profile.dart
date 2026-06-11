@@ -9,6 +9,7 @@ class GamificationProfile {
   final int totalScans;
   final List<String> earnedBadgeIds;
   final int streakShields;
+  final int longestStreak;
 
   const GamificationProfile({
     required this.totalXP,
@@ -19,6 +20,7 @@ class GamificationProfile {
     this.totalScans = 0,
     this.earnedBadgeIds = const [],
     this.streakShields = 0,
+    this.longestStreak = 0,
   });
 
   factory GamificationProfile.empty() => const GamificationProfile(totalXP: 0);
@@ -38,6 +40,7 @@ class GamificationProfile {
         earnedBadgeIds:
             List<String>.from(data['earnedBadgeIds'] as List? ?? []),
         streakShields: (data['streakShields'] as num?)?.toInt() ?? 0,
+        longestStreak: (data['longestStreak'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toFirestore() => {
@@ -49,6 +52,7 @@ class GamificationProfile {
         'totalScans': totalScans,
         'earnedBadgeIds': earnedBadgeIds,
         'streakShields': streakShields,
+        'longestStreak': longestStreak,
       };
 
   GamificationProfile copyWith({
@@ -60,6 +64,7 @@ class GamificationProfile {
     int? totalScans,
     List<String>? earnedBadgeIds,
     int? streakShields,
+    int? longestStreak,
   }) =>
       GamificationProfile(
         totalXP: totalXP ?? this.totalXP,
@@ -70,6 +75,7 @@ class GamificationProfile {
         totalScans: totalScans ?? this.totalScans,
         earnedBadgeIds: earnedBadgeIds ?? this.earnedBadgeIds,
         streakShields: streakShields ?? this.streakShields,
+        longestStreak: longestStreak ?? this.longestStreak,
       );
 
   /// XP required to reach level N: 50 * N * (N - 1)
@@ -91,6 +97,39 @@ class GamificationProfile {
 
   double get levelProgress =>
       xpForNextLevel > 0 ? (xpInCurrentLevel / xpForNextLevel).clamp(0.0, 1.0) : 1.0;
+
+  // ── Eco impact calculations ────────────────────────────────────────────────
+
+  /// Average weight of one thermal receipt in grams.
+  static const double gramsPaperPerReceipt = 5.0;
+
+  /// Grams of CO₂ avoided per receipt (thermal paper production estimate).
+  static const double gramsCO2PerReceipt = 1.5;
+
+  /// Human-readable paper saved label (e.g. "425g" or "1.2kg").
+  static String paperSavedLabel(int scans) {
+    final g = scans * gramsPaperPerReceipt;
+    return g >= 1000
+        ? '${(g / 1000).toStringAsFixed(1)}kg'
+        : '${g.toStringAsFixed(0)}g';
+  }
+
+  /// Human-readable CO₂ avoided label (e.g. "128g" or "1.1kg").
+  static String co2SavedLabel(int scans) {
+    final g = scans * gramsCO2PerReceipt;
+    return g >= 1000
+        ? '${(g / 1000).toStringAsFixed(1)}kg'
+        : '${g.toStringAsFixed(0)}g';
+  }
+
+  /// Short motivational tagline based on scan count.
+  static String ecoTagline(int scans) {
+    if (scans == 0) return 'Start scanning to make an impact!';
+    if (scans < 10) return 'Every receipt counts!';
+    if (scans < 50) return "You're making a difference!";
+    if (scans < 100) return 'Impressive eco impact!';
+    return 'Eco Warrior! Keep it up!';
+  }
 
   /// Streak multiplier applied to (base + quality) XP.
   double get streakMultiplier {

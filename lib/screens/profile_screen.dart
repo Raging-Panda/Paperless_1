@@ -11,6 +11,7 @@ import '../models/gamification_profile.dart';
 import '../services/gamification_service.dart';
 import '../models/badge_definition.dart';
 import '../widgets/badge_widget.dart';
+import '../widgets/eco_impact_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -422,6 +423,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _sectionLabel('Badges'),
                 const SizedBox(height: 10),
                 _BadgeShelf(profile: _gamProfile!),
+                const SizedBox(height: 24),
+                _sectionLabel('Eco Impact'),
+                const SizedBox(height: 10),
+                EcoImpactCard(profile: _gamProfile!),
+                const SizedBox(height: 24),
+                _sectionLabel('Lifetime Stats'),
+                const SizedBox(height: 10),
+                _TrophyShelf(profile: _gamProfile!),
               ],
 
               // ── Quick stats ──────────────────────────────────────────
@@ -1010,6 +1019,39 @@ class _BadgeShelf extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _TrophyShelf extends StatelessWidget {
+  final GamificationProfile profile;
+  const _TrophyShelf({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final xpLabel = profile.totalXP >= 1000
+        ? '${(profile.totalXP / 1000).toStringAsFixed(1)}k'
+        : '${profile.totalXP}';
+    return Row(
+      children: [
+        _StatCard(
+          value: '${profile.longestStreak}',
+          label: 'Best streak',
+          icon: Icons.local_fire_department_outlined,
+        ),
+        const SizedBox(width: 10),
+        _StatCard(
+          value: xpLabel,
+          label: 'Total XP',
+          icon: Icons.star_outline,
+        ),
+        const SizedBox(width: 10),
+        _StatCard(
+          value: '${profile.earnedBadgeIds.length}',
+          label: 'Badges',
+          icon: Icons.military_tech_outlined,
+        ),
+      ],
     );
   }
 }
