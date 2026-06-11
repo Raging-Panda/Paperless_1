@@ -66,7 +66,7 @@ Rotating short-term goals (e.g. "Scan at 3 different stores this week", "Log a r
 **Environmental Impact Tracker**
 Surfacing a live "paper saved" counter (sheets, grams, CO2 equivalent) on the profile screen ties gamification directly to the app's eco-friendly core purpose. Lifetime stats — total scans, total paper saved, longest streak ever — are shown as a persistent trophy shelf.
 
-**Social & Competitive**
+**Social & Competitive** *(backlog)*
 - Friends leaderboard — weekly XP rankings among friends.
 - Direct friend challenge — "who can scan more this week."
 - Referral bonus — invite a friend who completes their first scan and both accounts earn bonus XP. Organic growth mechanic.
@@ -74,10 +74,10 @@ Surfacing a live "paper saved" counter (sheets, grams, CO2 equivalent) on the pr
 **Onboarding Quest Line**
 Guided starter missions walk new users through app features (link an account, scan a first receipt, set a budget) while rewarding each completed step. Reduces drop-off during onboarding.
 
-**Rewards Redemption**
+**Rewards Redemption** *(backlog)*
 Points redeemable for partner store discount vouchers and optionally for environmental/charitable donations, reinforcing the eco angle.
 
-**Annual "Wrapped" Recap**
+**Annual "Wrapped" Recap** *(backlog)*
 A shareable end-of-year card showing total scans, paper saved, top stores visited, longest streak, and badges earned. Combines gamification with the financial intelligence features and is designed to be shared on social media.
 
 ### Receipt Management
