@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'screens/root_gate.dart';
 import 'settings/app_settings.dart';
 import 'widgets/offline_banner.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await AppSettings.instance.load();
+  await NotificationService.instance.init();
   runApp(const MyApp());
 }
 

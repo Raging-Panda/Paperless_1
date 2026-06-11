@@ -22,6 +22,7 @@ import '../screens/challenges_screen.dart';
 import '../models/quest_definition.dart';
 import '../services/quest_service.dart';
 import '../widgets/quest_card.dart';
+import '../services/notification_service.dart';
 import '../screens/quest_screen.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
@@ -57,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadGamProfile() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+    NotificationService.instance.requestPermission().ignore();
     final profile = await GamificationService.instance.getProfile(uid);
     final pending = await ChallengeService.instance.getPendingRewardCount(uid);
     await QuestService.instance.onUserInit(uid);
@@ -351,6 +353,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _gamProfile = xpResult.updatedProfile;
           _pendingChallengeCount += completedChallenges.length;
         });
+        NotificationService.instance
+            .scheduleStreakReminder(xpResult.updatedProfile.currentStreak)
+            .ignore();
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text('Receipt saved · ${xpResult.message}')),

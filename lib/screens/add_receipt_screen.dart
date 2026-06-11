@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/receipt_repository.dart';
+import '../data/receipt_database.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
@@ -14,6 +15,7 @@ import '../services/quest_service.dart';
 import '../models/challenge.dart';
 import '../services/challenge_service.dart';
 import '../settings/app_settings.dart';
+import '../services/notification_service.dart';
 
 class AddReceiptScreen extends StatefulWidget {
   final Receipt? initial;
@@ -140,6 +142,11 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           );
           await showLevelUpIfNeeded(context, xpResult);
           await showBadgeUnlocksIfAny(context, xpResult.newlyUnlockedBadges);
+          // Schedule streak reminder for tomorrow
+          NotificationService.instance
+              .scheduleStreakReminder(
+                  xpResult.updatedProfile.currentStreak)
+              .ignore();
           final completedQuests = await QuestService.instance
               .onReceiptSaved(uid, saved, xpResult.updatedProfile);
           if (completedQuests.isNotEmpty && mounted) {
@@ -159,6 +166,39 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
                     'Challenge complete! ${completedChallenges.first.title} — check Challenges for your reward.'),
               ),
             );
+          }
+        }
+        // Schedule return-window reminder (28 days from receipt date)
+        if (saved.id != null) {
+          final receiptDate =
+              DateTime.tryParse(saved.date) ?? DateTime.now();
+          NotificationService.instance
+              .scheduleReturnReminder(
+                  saved.id!, saved.title, receiptDate)
+              .ignore();
+        }
+
+        // Budget alert — check if monthly spend for this category crossed 80% or 100%
+        if (saved.category != null) {
+          final catBudget =
+              AppSettings.instance.budgets[saved.category];
+          if (catBudget != null && catBudget > 0) {
+            final allReceipts =
+                await ReceiptDatabase.instance.readAllReceipts();
+            final now = DateTime.now();
+            final monthSpend = allReceipts
+                .where((r) {
+                  final d = DateTime.tryParse(r.date);
+                  return d != null &&
+                      d.year == now.year &&
+                      d.month == now.month &&
+                      r.category == saved.category;
+                })
+                .fold(0.0, (sum, r) => sum + r.amount);
+            NotificationService.instance
+                .checkBudgetAlert(
+                    saved.category!, monthSpend, catBudget)
+                .ignore();
           }
         }
       }
