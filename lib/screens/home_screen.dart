@@ -311,11 +311,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final uid = FirebaseAuth.instance.currentUser!.uid;
       try {
         await ReceiptRepository.instance.save(uid, receipt);
-        GamificationService.instance.onReceiptSaved(uid).ignore();
+        final xpResult = await GamificationService.instance.onReceiptSaved(uid, receipt);
         if (!mounted) return;
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(this.context).showSnackBar(
-          const SnackBar(content: Text('Receipt saved to history.')),
+          SnackBar(content: Text('Receipt saved · ${xpResult.message}')),
         );
       } catch (_) {
         if (!mounted) return;

@@ -126,7 +126,12 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
               : null,
         );
         saved = await ReceiptRepository.instance.save(uid, receipt, localPhotoPath: _localPhotoPath);
-        GamificationService.instance.onReceiptSaved(uid).ignore();
+        final xpResult = await GamificationService.instance.onReceiptSaved(uid, saved);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(xpResult.message)),
+          );
+        }
       }
       if (!mounted) return;
       Navigator.of(context).pop(saved);

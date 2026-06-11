@@ -2,18 +2,46 @@ import 'package:flutter/material.dart';
 
 class GamificationProfile {
   final int totalXP;
+  final int currentStreak;
+  final String? lastScanDate; // "YYYY-MM-DD" date string
+  final List<String> seenStores; // normalised (lowercase, trimmed) store names
 
-  const GamificationProfile({required this.totalXP});
+  const GamificationProfile({
+    required this.totalXP,
+    this.currentStreak = 0,
+    this.lastScanDate,
+    this.seenStores = const [],
+  });
 
   factory GamificationProfile.empty() => const GamificationProfile(totalXP: 0);
 
   factory GamificationProfile.fromFirestore(Map<String, dynamic> data) =>
-      GamificationProfile(totalXP: (data['totalXP'] as num?)?.toInt() ?? 0);
+      GamificationProfile(
+        totalXP: (data['totalXP'] as num?)?.toInt() ?? 0,
+        currentStreak: (data['currentStreak'] as num?)?.toInt() ?? 0,
+        lastScanDate: data['lastScanDate'] as String?,
+        seenStores: List<String>.from(data['seenStores'] as List? ?? []),
+      );
 
-  Map<String, dynamic> toFirestore() => {'totalXP': totalXP};
+  Map<String, dynamic> toFirestore() => {
+        'totalXP': totalXP,
+        'currentStreak': currentStreak,
+        'lastScanDate': lastScanDate,
+        'seenStores': seenStores,
+      };
 
-  GamificationProfile copyWith({int? totalXP}) =>
-      GamificationProfile(totalXP: totalXP ?? this.totalXP);
+  GamificationProfile copyWith({
+    int? totalXP,
+    int? currentStreak,
+    String? lastScanDate,
+    List<String>? seenStores,
+  }) =>
+      GamificationProfile(
+        totalXP: totalXP ?? this.totalXP,
+        currentStreak: currentStreak ?? this.currentStreak,
+        lastScanDate: lastScanDate ?? this.lastScanDate,
+        seenStores: seenStores ?? this.seenStores,
+      );
 
   /// XP required to reach level N: 50 * N * (N - 1)
   /// Level 1: 0, Level 2: 100, Level 3: 300, Level 4: 600, Level 5: 1000 …
@@ -34,6 +62,14 @@ class GamificationProfile {
 
   double get levelProgress =>
       xpForNextLevel > 0 ? (xpInCurrentLevel / xpForNextLevel).clamp(0.0, 1.0) : 1.0;
+
+  /// Streak multiplier applied to (base + quality) XP.
+  double get streakMultiplier {
+    if (currentStreak >= 30) return 3.0;
+    if (currentStreak >= 7) return 2.0;
+    if (currentStreak >= 3) return 1.5;
+    return 1.0;
+  }
 
   String get tier {
     final l = level;
