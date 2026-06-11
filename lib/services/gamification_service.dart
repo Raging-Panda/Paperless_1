@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/badge_definition.dart';
 import '../models/gamification_profile.dart';
 import '../models/receipt.dart';
 
@@ -10,6 +11,7 @@ class XpAwardResult {
   final int newStreak;
   final GamificationProfile updatedProfile;
   final int previousLevel;
+  final List<BadgeDefinition> newlyUnlockedBadges;
 
   const XpAwardResult({
     required this.xpEarned,
@@ -18,6 +20,7 @@ class XpAwardResult {
     required this.newStreak,
     required this.updatedProfile,
     required this.previousLevel,
+    this.newlyUnlockedBadges = const [],
   });
 
   bool get leveledUp => updatedProfile.level > previousLevel;
@@ -84,7 +87,7 @@ class GamificationService {
   }
 
   /// Called when a new receipt is saved. Applies all bonuses and returns a
-  /// detailed [XpAwardResult].
+  /// detailed [XpAwardResult] including any newly unlocked badges.
   Future<XpAwardResult> onReceiptSaved(String uid, Receipt receipt) async {
     final current = await getProfile(uid);
     final previousLevel = current.level;
@@ -100,6 +103,10 @@ class GamificationService {
         ? [...current.seenStores, normalised]
         : current.seenStores;
 
+    // ── Store scan counts ────────────────────────────────────────────────────
+    final updatedCounts = Map<String, int>.from(current.storeScanCounts);
+    updatedCounts[normalised] = (updatedCounts[normalised] ?? 0) + 1;
+
     // ── Quality bonus ────────────────────────────────────────────────────────
     int qualityBonus = 0;
     if (receipt.category != null) qualityBonus += _categoryBonus;
@@ -111,14 +118,28 @@ class GamificationService {
     final storeBonus = isNewStore ? _newStoreBonus : 0;
     final totalEarned = xpFromScan + storeBonus;
 
-    final updated = current.copyWith(
+    // ── Intermediate profile (before badge check) ────────────────────────────
+    final intermediate = current.copyWith(
       totalXP: current.totalXP + totalEarned,
       currentStreak: newStreak,
       lastScanDate: _todayStr(),
       seenStores: updatedStores,
+      storeScanCounts: updatedCounts,
+      totalScans: current.totalScans + 1,
     );
+
+    // ── Badge unlock check ───────────────────────────────────────────────────
+    final newBadgeIds = _checkNewBadges(intermediate);
+    final allBadgeIds = [...intermediate.earnedBadgeIds, ...newBadgeIds];
+    final updated = intermediate.copyWith(earnedBadgeIds: allBadgeIds);
+
     _cached = updated;
     _persist(uid, updated);
+
+    final newBadges = newBadgeIds
+        .map((id) => BadgeCatalogue.findById(id))
+        .whereType<BadgeDefinition>()
+        .toList();
 
     return XpAwardResult(
       xpEarned: totalEarned,
@@ -127,6 +148,7 @@ class GamificationService {
       newStreak: newStreak,
       updatedProfile: updated,
       previousLevel: previousLevel,
+      newlyUnlockedBadges: newBadges,
     );
   }
 
@@ -155,7 +177,7 @@ class GamificationService {
     final today = _todayStr();
     final last = profile.lastScanDate;
     if (last == null) return 1;
-    if (last == today) return profile.currentStreak; // already scanned today
+    if (last == today) return profile.currentStreak;
     final lastDate = DateTime.tryParse(last);
     if (lastDate == null) return 1;
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
@@ -170,5 +192,28 @@ class GamificationService {
     if (streak >= 7) return 2.0;
     if (streak >= 3) return 1.5;
     return 1.0;
+  }
+
+  /// Returns IDs of badges newly earned by [profile] that are not yet in
+  /// [profile.earnedBadgeIds]. Does NOT mutate the profile.
+  List<String> _checkNewBadges(GamificationProfile profile) {
+    final earned = profile.earnedBadgeIds.toSet();
+    final newIds = <String>[];
+
+    void check(String id, bool condition) {
+      if (!earned.contains(id) && condition) newIds.add(id);
+    }
+
+    check('first_scan', profile.totalScans >= 1);
+    check('streak_7', profile.currentStreak >= 7);
+    check('streak_30', profile.currentStreak >= 30);
+    check('explorer', profile.seenStores.length >= 10);
+    check('loyal_regular',
+        profile.storeScanCounts.values.any((c) => c >= 10));
+    check('eco_warrior', profile.totalScans >= 100);
+    check('green_giant', profile.totalScans >= 50);
+    // 'budget_master' is deferred until budget integration is complete.
+
+    return newIds;
   }
 }

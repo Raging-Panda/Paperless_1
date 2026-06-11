@@ -5,12 +5,18 @@ class GamificationProfile {
   final int currentStreak;
   final String? lastScanDate; // "YYYY-MM-DD" date string
   final List<String> seenStores; // normalised (lowercase, trimmed) store names
+  final Map<String, int> storeScanCounts; // normalised store name → scan count
+  final int totalScans;
+  final List<String> earnedBadgeIds;
 
   const GamificationProfile({
     required this.totalXP,
     this.currentStreak = 0,
     this.lastScanDate,
     this.seenStores = const [],
+    this.storeScanCounts = const {},
+    this.totalScans = 0,
+    this.earnedBadgeIds = const [],
   });
 
   factory GamificationProfile.empty() => const GamificationProfile(totalXP: 0);
@@ -21,6 +27,14 @@ class GamificationProfile {
         currentStreak: (data['currentStreak'] as num?)?.toInt() ?? 0,
         lastScanDate: data['lastScanDate'] as String?,
         seenStores: List<String>.from(data['seenStores'] as List? ?? []),
+        storeScanCounts: Map<String, int>.from(
+          (data['storeScanCounts'] as Map?)
+                  ?.map((k, v) => MapEntry(k as String, (v as num).toInt())) ??
+              {},
+        ),
+        totalScans: (data['totalScans'] as num?)?.toInt() ?? 0,
+        earnedBadgeIds:
+            List<String>.from(data['earnedBadgeIds'] as List? ?? []),
       );
 
   Map<String, dynamic> toFirestore() => {
@@ -28,6 +42,9 @@ class GamificationProfile {
         'currentStreak': currentStreak,
         'lastScanDate': lastScanDate,
         'seenStores': seenStores,
+        'storeScanCounts': storeScanCounts,
+        'totalScans': totalScans,
+        'earnedBadgeIds': earnedBadgeIds,
       };
 
   GamificationProfile copyWith({
@@ -35,12 +52,18 @@ class GamificationProfile {
     int? currentStreak,
     String? lastScanDate,
     List<String>? seenStores,
+    Map<String, int>? storeScanCounts,
+    int? totalScans,
+    List<String>? earnedBadgeIds,
   }) =>
       GamificationProfile(
         totalXP: totalXP ?? this.totalXP,
         currentStreak: currentStreak ?? this.currentStreak,
         lastScanDate: lastScanDate ?? this.lastScanDate,
         seenStores: seenStores ?? this.seenStores,
+        storeScanCounts: storeScanCounts ?? this.storeScanCounts,
+        totalScans: totalScans ?? this.totalScans,
+        earnedBadgeIds: earnedBadgeIds ?? this.earnedBadgeIds,
       );
 
   /// XP required to reach level N: 50 * N * (N - 1)

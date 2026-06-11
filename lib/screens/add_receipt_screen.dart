@@ -7,6 +7,7 @@ import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
 import '../widgets/level_up_dialog.dart';
+import '../widgets/badge_unlock_dialog.dart';
 import '../settings/app_settings.dart';
 
 class AddReceiptScreen extends StatefulWidget {
@@ -133,6 +134,7 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
             SnackBar(content: Text(xpResult.message)),
           );
           await showLevelUpIfNeeded(context, xpResult);
+          await showBadgeUnlocksIfAny(context, xpResult.newlyUnlockedBadges);
         }
       }
       if (!mounted) return;

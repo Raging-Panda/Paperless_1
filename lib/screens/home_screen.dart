@@ -13,6 +13,7 @@ import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
 import '../widgets/level_up_dialog.dart';
+import '../widgets/badge_unlock_dialog.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
@@ -320,6 +321,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         // ignore: use_build_context_synchronously
         await showLevelUpIfNeeded(this.context, xpResult);
+        // ignore: use_build_context_synchronously
+        await showBadgeUnlocksIfAny(this.context, xpResult.newlyUnlockedBadges);
       } catch (_) {
         if (!mounted) return;
         // ignore: use_build_context_synchronously

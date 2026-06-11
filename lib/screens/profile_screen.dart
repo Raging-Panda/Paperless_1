@@ -9,6 +9,8 @@ import '../data/receipt_repository.dart';
 import '../settings/app_settings.dart';
 import '../models/gamification_profile.dart';
 import '../services/gamification_service.dart';
+import '../models/badge_definition.dart';
+import '../widgets/badge_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -416,6 +418,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _sectionLabel('Progress'),
                 const SizedBox(height: 10),
                 _TierLadder(profile: _gamProfile!),
+                const SizedBox(height: 24),
+                _sectionLabel('Badges'),
+                const SizedBox(height: 10),
+                _BadgeShelf(profile: _gamProfile!),
               ],
 
               // ── Quick stats ──────────────────────────────────────────
@@ -958,6 +964,52 @@ class _TierRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BadgeShelf extends StatelessWidget {
+  final GamificationProfile profile;
+  const _BadgeShelf({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final earned = profile.earnedBadgeIds.toSet();
+    // Earned badges first, then locked
+    final sorted = [
+      ...BadgeCatalogue.all.where((b) => earned.contains(b.id)),
+      ...BadgeCatalogue.all.where((b) => !earned.contains(b.id)),
+    ];
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 8,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: sorted.length,
+      itemBuilder: (_, i) {
+        final badge = sorted[i];
+        final isEarned = earned.contains(badge.id);
+        return Column(
+          children: [
+            BadgeWidget(badge: badge, earned: isEarned, size: 52),
+            const SizedBox(height: 5),
+            Text(
+              badge.name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                color: isEarned ? Colors.white70 : Colors.white24,
+                fontSize: 9,
+                height: 1.3,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
