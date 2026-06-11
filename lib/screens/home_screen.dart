@@ -19,6 +19,10 @@ import '../widgets/badge_unlock_dialog.dart';
 import '../models/challenge.dart';
 import '../services/challenge_service.dart';
 import '../screens/challenges_screen.dart';
+import '../models/quest_definition.dart';
+import '../services/quest_service.dart';
+import '../widgets/quest_card.dart';
+import '../screens/quest_screen.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
@@ -41,6 +45,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   GamificationProfile? _gamProfile;
   int _pendingChallengeCount = 0;
+  List<String> _completedQuestIds = [];
 
   @override
   void initState() {
@@ -54,10 +59,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (uid == null) return;
     final profile = await GamificationService.instance.getProfile(uid);
     final pending = await ChallengeService.instance.getPendingRewardCount(uid);
+    await QuestService.instance.onUserInit(uid);
+    final questIds = await QuestService.instance.getCompletedIds(uid);
     if (mounted) {
       setState(() {
         _gamProfile = profile;
         _pendingChallengeCount = pending;
+        _completedQuestIds = questIds;
       });
     }
   }
@@ -351,6 +359,23 @@ class _HomeScreenState extends State<HomeScreen> {
         await showLevelUpIfNeeded(this.context, xpResult);
         // ignore: use_build_context_synchronously
         await showBadgeUnlocksIfAny(this.context, xpResult.newlyUnlockedBadges);
+        final completedQuests = await QuestService.instance
+            .onReceiptSaved(uid, receipt, xpResult.updatedProfile);
+        if (completedQuests.isNotEmpty && mounted) {
+          setState(() {
+            _completedQuestIds = [
+              ..._completedQuestIds,
+              ...completedQuests.map((q) => q.id),
+            ];
+          });
+          // ignore: use_build_context_synchronously
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Quest complete: ${completedQuests.first.title} +${completedQuests.first.xpReward} XP'),
+            ),
+          );
+        }
         if (completedChallenges.isNotEmpty && mounted) {
           // ignore: use_build_context_synchronously
           ScaffoldMessenger.of(this.context).showSnackBar(
@@ -447,6 +472,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.map_outlined),
+                title: const Text('Quest Line'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const QuestScreen()),
+                  );
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.emoji_events_outlined),
                 title: const Text('Challenges'),
                 trailing: _pendingChallengeCount > 0
@@ -501,10 +536,15 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (_gamProfile != null)
-                StreakCard(profile: _gamProfile!)
-              else
-                const SizedBox(),
+              Column(
+                children: [
+                  if (_gamProfile != null) StreakCard(profile: _gamProfile!),
+                  if (_completedQuestIds.length < QuestCatalogue.all.length) ...[
+                    const SizedBox(height: 10),
+                    QuestCard(completedQuestIds: _completedQuestIds),
+                  ],
+                ],
+              ),
               Column(
                 children: [
                   const Text(

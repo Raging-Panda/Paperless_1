@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../services/quest_service.dart';
 import '../data/receipt_database.dart';
 import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
@@ -21,6 +22,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   void initState() {
     super.initState();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      QuestService.instance.onAnalyticsVisited(uid).ignore();
+    }
     _load();
   }
 

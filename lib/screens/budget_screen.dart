@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/receipt.dart';
+import '../services/quest_service.dart';
 import '../settings/app_settings.dart';
 
 class BudgetScreen extends StatefulWidget {
@@ -66,6 +68,10 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
     final limit = result <= 0 ? null : result;
     await AppSettings.instance.setBudget(category, limit);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      QuestService.instance.onBudgetSaved(uid).ignore();
+    }
     if (mounted) {
       setState(() {
         _budgets = Map.from(AppSettings.instance.budgets);

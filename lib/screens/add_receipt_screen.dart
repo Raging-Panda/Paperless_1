@@ -8,6 +8,9 @@ import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/badge_unlock_dialog.dart';
+import '../models/gamification_profile.dart';
+import '../models/quest_definition.dart';
+import '../services/quest_service.dart';
 import '../models/challenge.dart';
 import '../services/challenge_service.dart';
 import '../settings/app_settings.dart';
@@ -137,6 +140,16 @@ class _AddReceiptScreenState extends State<AddReceiptScreen> {
           );
           await showLevelUpIfNeeded(context, xpResult);
           await showBadgeUnlocksIfAny(context, xpResult.newlyUnlockedBadges);
+          final completedQuests = await QuestService.instance
+              .onReceiptSaved(uid, saved, xpResult.updatedProfile);
+          if (completedQuests.isNotEmpty && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Quest complete: ${completedQuests.first.title} +${completedQuests.first.xpReward} XP'),
+              ),
+            );
+          }
           final completedChallenges =
               await ChallengeService.instance.onReceiptSaved(uid, saved);
           if (completedChallenges.isNotEmpty && mounted) {
