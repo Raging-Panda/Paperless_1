@@ -9,6 +9,7 @@ class XpAwardResult {
   final bool isNewStore;
   final double multiplierApplied;
   final int newStreak;
+  final bool shieldUsed;
   final GamificationProfile updatedProfile;
   final int previousLevel;
   final List<BadgeDefinition> newlyUnlockedBadges;
@@ -18,6 +19,7 @@ class XpAwardResult {
     required this.isNewStore,
     required this.multiplierApplied,
     required this.newStreak,
+    required this.shieldUsed,
     required this.updatedProfile,
     required this.previousLevel,
     this.newlyUnlockedBadges = const [],
@@ -32,6 +34,7 @@ class XpAwardResult {
   /// Short human-readable summary, e.g. "+18 XP · New store! · 1.5x streak"
   String get message {
     final parts = <String>['+$xpEarned XP'];
+    if (shieldUsed) parts.add('Shield saved your streak!');
     if (isNewStore) parts.add('New store!');
     if (multiplierApplied > 1.0) {
       final label = multiplierApplied == multiplierApplied.truncateToDouble()
@@ -92,8 +95,32 @@ class GamificationService {
     final current = await getProfile(uid);
     final previousLevel = current.level;
 
-    // ── Streak ──────────────────────────────────────────────────────────────
-    final newStreak = _computeStreak(current);
+    // ── Streak + shield logic ────────────────────────────────────────────────
+    final today = _todayStr();
+    final last = current.lastScanDate;
+    int newStreak;
+    bool shieldUsed = false;
+
+    if (last == null) {
+      newStreak = 1;
+    } else if (last == today) {
+      newStreak = current.currentStreak; // already scanned today
+    } else {
+      final now = DateTime.now();
+      final yesterdayStr = _dateStrOf(now.subtract(const Duration(days: 1)));
+      final twoDaysAgoStr = _dateStrOf(now.subtract(const Duration(days: 2)));
+
+      if (last == yesterdayStr) {
+        newStreak = current.currentStreak + 1;
+      } else if (last == twoDaysAgoStr && current.streakShields > 0) {
+        // Shield absorbs exactly one missed day
+        newStreak = current.currentStreak + 1;
+        shieldUsed = true;
+      } else {
+        newStreak = 1;
+      }
+    }
+
     final double multiplier = _multiplierForStreak(newStreak);
 
     // ── New store ────────────────────────────────────────────────────────────
@@ -118,20 +145,45 @@ class GamificationService {
     final storeBonus = isNewStore ? _newStoreBonus : 0;
     final totalEarned = xpFromScan + storeBonus;
 
-    // ── Intermediate profile (before badge check) ────────────────────────────
+    // ── Intermediate profile (before badge/shield-grant check) ───────────────
     final intermediate = current.copyWith(
       totalXP: current.totalXP + totalEarned,
       currentStreak: newStreak,
-      lastScanDate: _todayStr(),
+      lastScanDate: today,
       seenStores: updatedStores,
       storeScanCounts: updatedCounts,
       totalScans: current.totalScans + 1,
+      streakShields: current.streakShields - (shieldUsed ? 1 : 0),
     );
 
     // ── Badge unlock check ───────────────────────────────────────────────────
     final newBadgeIds = _checkNewBadges(intermediate);
     final allBadgeIds = [...intermediate.earnedBadgeIds, ...newBadgeIds];
-    final updated = intermediate.copyWith(earnedBadgeIds: allBadgeIds);
+    final withBadges = intermediate.copyWith(earnedBadgeIds: allBadgeIds);
+
+    // ── Tier-up shield grant ─────────────────────────────────────────────────
+    int shieldGrant = 0;
+    if (withBadges.tier != current.tier) {
+      switch (withBadges.tier) {
+        case 'Silver':
+          shieldGrant = 1;
+          break;
+        case 'Gold':
+          shieldGrant = 1;
+          break;
+        case 'Platinum':
+          shieldGrant = 1;
+          break;
+        case 'Eco Elite':
+          shieldGrant = 2;
+          break;
+      }
+    }
+
+    final updated = shieldGrant > 0
+        ? withBadges.copyWith(
+            streakShields: withBadges.streakShields + shieldGrant)
+        : withBadges;
 
     _cached = updated;
     _persist(uid, updated);
@@ -146,6 +198,7 @@ class GamificationService {
       isNewStore: isNewStore,
       multiplierApplied: multiplier,
       newStreak: newStreak,
+      shieldUsed: shieldUsed,
       updatedProfile: updated,
       previousLevel: previousLevel,
       newlyUnlockedBadges: newBadges,
@@ -166,26 +219,12 @@ class GamificationService {
         .ignore();
   }
 
-  String _todayStr() {
-    final now = DateTime.now();
-    return '${now.year}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-  }
+  String _todayStr() => _dateStrOf(DateTime.now());
 
-  int _computeStreak(GamificationProfile profile) {
-    final today = _todayStr();
-    final last = profile.lastScanDate;
-    if (last == null) return 1;
-    if (last == today) return profile.currentStreak;
-    final lastDate = DateTime.tryParse(last);
-    if (lastDate == null) return 1;
-    final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    final isYesterday = lastDate.year == yesterday.year &&
-        lastDate.month == yesterday.month &&
-        lastDate.day == yesterday.day;
-    return isYesterday ? profile.currentStreak + 1 : 1;
-  }
+  String _dateStrOf(DateTime dt) =>
+      '${dt.year}-'
+      '${dt.month.toString().padLeft(2, '0')}-'
+      '${dt.day.toString().padLeft(2, '0')}';
 
   double _multiplierForStreak(int streak) {
     if (streak >= 30) return 3.0;
@@ -212,7 +251,7 @@ class GamificationService {
         profile.storeScanCounts.values.any((c) => c >= 10));
     check('eco_warrior', profile.totalScans >= 100);
     check('green_giant', profile.totalScans >= 50);
-    // 'budget_master' is deferred until budget integration is complete.
+    // 'budget_master' deferred until budget integration is complete.
 
     return newIds;
   }

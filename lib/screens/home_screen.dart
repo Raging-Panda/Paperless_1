@@ -12,6 +12,8 @@ import '../data/receipt_repository.dart';
 import '../models/receipt.dart';
 import '../services/recurring_service.dart';
 import '../services/gamification_service.dart';
+import '../models/gamification_profile.dart';
+import '../widgets/streak_card.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/badge_unlock_dialog.dart';
 import '../settings/app_settings.dart';
@@ -34,10 +36,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  GamificationProfile? _gamProfile;
+
   @override
   void initState() {
     super.initState();
     RecurringService.processOverdue();
+    _loadGamProfile();
+  }
+
+  Future<void> _loadGamProfile() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final profile = await GamificationService.instance.getProfile(uid);
+    if (mounted) setState(() => _gamProfile = profile);
   }
 
   void _openProfile(BuildContext context) {
@@ -315,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await ReceiptRepository.instance.save(uid, receipt);
         final xpResult = await GamificationService.instance.onReceiptSaved(uid, receipt);
         if (!mounted) return;
+        setState(() => _gamProfile = xpResult.updatedProfile);
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text('Receipt saved · ${xpResult.message}')),
@@ -432,7 +445,10 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const SizedBox(),
+              if (_gamProfile != null)
+                StreakCard(profile: _gamProfile!)
+              else
+                const SizedBox(),
               Column(
                 children: [
                   const Text(

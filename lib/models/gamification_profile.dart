@@ -8,6 +8,7 @@ class GamificationProfile {
   final Map<String, int> storeScanCounts; // normalised store name → scan count
   final int totalScans;
   final List<String> earnedBadgeIds;
+  final int streakShields;
 
   const GamificationProfile({
     required this.totalXP,
@@ -17,6 +18,7 @@ class GamificationProfile {
     this.storeScanCounts = const {},
     this.totalScans = 0,
     this.earnedBadgeIds = const [],
+    this.streakShields = 0,
   });
 
   factory GamificationProfile.empty() => const GamificationProfile(totalXP: 0);
@@ -35,6 +37,7 @@ class GamificationProfile {
         totalScans: (data['totalScans'] as num?)?.toInt() ?? 0,
         earnedBadgeIds:
             List<String>.from(data['earnedBadgeIds'] as List? ?? []),
+        streakShields: (data['streakShields'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toFirestore() => {
@@ -45,6 +48,7 @@ class GamificationProfile {
         'storeScanCounts': storeScanCounts,
         'totalScans': totalScans,
         'earnedBadgeIds': earnedBadgeIds,
+        'streakShields': streakShields,
       };
 
   GamificationProfile copyWith({
@@ -55,6 +59,7 @@ class GamificationProfile {
     Map<String, int>? storeScanCounts,
     int? totalScans,
     List<String>? earnedBadgeIds,
+    int? streakShields,
   }) =>
       GamificationProfile(
         totalXP: totalXP ?? this.totalXP,
@@ -64,6 +69,7 @@ class GamificationProfile {
         storeScanCounts: storeScanCounts ?? this.storeScanCounts,
         totalScans: totalScans ?? this.totalScans,
         earnedBadgeIds: earnedBadgeIds ?? this.earnedBadgeIds,
+        streakShields: streakShields ?? this.streakShields,
       );
 
   /// XP required to reach level N: 50 * N * (N - 1)
