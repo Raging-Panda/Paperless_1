@@ -27,6 +27,7 @@ import '../screens/quest_screen.dart';
 import '../settings/app_settings.dart';
 import '../widgets/receipt_detail_row.dart';
 import '../widgets/scan_option_button.dart';
+import '../widgets/banner_ad_widget.dart';
 import 'analytics_screen.dart';
 import 'budget_screen.dart';
 import 'help_screen.dart';
@@ -434,6 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
+      bottomNavigationBar: const BannerAdWidget(),
       appBar: AppBar(
         title: const Text('Paperless'),
         actions: [

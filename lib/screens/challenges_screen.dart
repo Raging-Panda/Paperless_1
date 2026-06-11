@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/challenge.dart';
 import '../services/challenge_service.dart';
 import '../services/gamification_service.dart';
+import '../services/ad_service.dart';
 import '../widgets/challenge_card.dart';
 import '../widgets/scratch_reward_dialog.dart';
 
@@ -34,10 +35,26 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    // Show a rewarded ad before granting the reward.
+    // If the ad fails to load, proceed anyway so the user isn't blocked.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Loading your reward — watch a short ad to claim it!'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    await AdService.instance.showRewarded(
+      onEarnedReward: () {}, // reward is always granted below
+      onFailed: () {},       // fail-open: proceed even if ad fails
+    );
+
+    if (!mounted) return;
+
     final weekNum = ChallengeService.currentWeekNumber();
     final reward = ChallengeService.rewardFor(challenge.id, weekNum);
 
-    if (!mounted) return;
     final collected = await showScratchRewardDialog(
       context,
       challengeTitle: challenge.title,
