@@ -16,7 +16,6 @@ import '../models/gamification_profile.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/level_up_dialog.dart';
 import '../widgets/badge_unlock_dialog.dart';
-import '../models/challenge.dart';
 import '../services/challenge_service.dart';
 import '../screens/challenges_screen.dart';
 import '../models/quest_definition.dart';

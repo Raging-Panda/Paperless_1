@@ -10,7 +10,7 @@ class AdService {
   static final instance = AdService._();
 
   // --- Test ad unit IDs (safe to use during development) ---
-  static const _bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+  static const _bannerAdUnitId = 'ca-app-pub-3739862204262213/6420771400';
   static const _rewardedAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
 
   RewardedAd? _rewardedAd;
@@ -67,7 +67,7 @@ class AdService {
           );
 
           ad.show(
-            onUserEarnedReward: (_, __) => onEarnedReward(),
+            onUserEarnedReward: (_, _) => onEarnedReward(),
           );
         },
         onAdFailedToLoad: (_) {

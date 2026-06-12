@@ -91,7 +91,7 @@ class _QuestScreenState extends State<QuestScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
                       itemCount: QuestCatalogue.all.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(height: 10),
                       itemBuilder: (_, i) {
                         final quest = QuestCatalogue.all[i];
